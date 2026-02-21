@@ -23,7 +23,8 @@ export const SignInScreen: React.FC<SignInScreenProps> = ({ onSignUp }) => {
   const [agreeTerms, setAgreeTerms] = React.useState(false);
   const [emailFocused, setEmailFocused] = React.useState(false);
   const [passwordVisible, setPasswordVisible] = React.useState(false);
-  const showRightPanel = width >= 900;
+  const RIGHT_PANEL_MIN_WIDTH = 1120;
+  const showRightPanel = width >= RIGHT_PANEL_MIN_WIDTH;
 
   const onContinue = () => {
     // TODO: Wire this up to your backend API
