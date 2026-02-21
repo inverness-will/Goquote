@@ -34,6 +34,9 @@ jobs:
       - name: Export web build
         run: npm run build:web
 
+      - name: Configure custom domain
+        run: echo "www.goquote.cloud" > dist/CNAME
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
         with:

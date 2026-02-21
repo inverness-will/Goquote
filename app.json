@@ -17,7 +17,7 @@
       "expo-font"
     ],
     "experiments": {
-      "baseUrl": "/Goquote"
+      "baseUrl": "/"
     }
   }
 }
