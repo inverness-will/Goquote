@@ -7,3 +7,9 @@ This project auto-deploys the Expo web build to GitHub Pages from `main` using t
 GitHub Pages URL:
 
 - `https://inverness-will.github.io/Goquote/`
+
+## Backend API (Express + TypeScript)
+
+Backend code now lives in `backend/`.
+
+- Setup and run instructions: `backend/README.md`

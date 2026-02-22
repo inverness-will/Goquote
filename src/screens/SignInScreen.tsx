@@ -15,9 +15,14 @@ import { Feather } from '@expo/vector-icons';
 export interface SignInScreenProps {
   onSignUp?: () => void;
   onForgotPassword?: () => void;
+  onSignIn?: (email: string, password: string) => void;
 }
 
-export const SignInScreen: React.FC<SignInScreenProps> = ({ onSignUp, onForgotPassword }) => {
+export const SignInScreen: React.FC<SignInScreenProps> = ({
+  onSignUp,
+  onForgotPassword,
+  onSignIn
+}) => {
   const { width } = useWindowDimensions();
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
@@ -28,8 +33,7 @@ export const SignInScreen: React.FC<SignInScreenProps> = ({ onSignUp, onForgotPa
   const showRightPanel = width >= RIGHT_PANEL_MIN_WIDTH;
 
   const onContinue = () => {
-    // TODO: Wire this up to your backend API
-    console.log('Sign in with', { email, password, agreeTerms });
+    onSignIn?.(email, password);
   };
 
   const handleSignUp = () => {

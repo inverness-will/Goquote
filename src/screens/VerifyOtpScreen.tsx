@@ -16,9 +16,10 @@ import { AuthDecorativePanel } from '../components/AuthDecorativePanel';
 export interface VerifyOtpScreenProps {
   onBack?: () => void;
   onContinue?: (code: string) => void;
+  onResend?: () => void;
 }
 
-export const VerifyOtpScreen: React.FC<VerifyOtpScreenProps> = ({ onBack, onContinue }) => {
+export const VerifyOtpScreen: React.FC<VerifyOtpScreenProps> = ({ onBack, onContinue, onResend }) => {
   const { width } = useWindowDimensions();
   const RIGHT_PANEL_MIN_WIDTH = 1120;
   const showRightPanel = width >= RIGHT_PANEL_MIN_WIDTH;
@@ -97,7 +98,7 @@ export const VerifyOtpScreen: React.FC<VerifyOtpScreenProps> = ({ onBack, onCont
               </TouchableOpacity>
               <View style={styles.footerRow}>
                 <Text style={styles.footerText}>Still having trouble?</Text>
-                <TouchableOpacity>
+                <TouchableOpacity onPress={onResend}>
                   <Text style={styles.footerLink}>Resend Code</Text>
                 </TouchableOpacity>
               </View>
