@@ -23,6 +23,7 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ onBa
   const [email, setEmail] = React.useState('');
   const RIGHT_PANEL_MIN_WIDTH = 1120;
   const showRightPanel = width >= RIGHT_PANEL_MIN_WIDTH;
+  const webNoOutline = Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : undefined;
 
   return (
     <KeyboardAvoidingView
@@ -56,7 +57,7 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ onBa
                 <View style={styles.inputWrapper}>
                   <Feather name="mail" size={16} color="#6B7280" />
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, webNoOutline]}
                     placeholder="Johndoe@email.com"
                     placeholderTextColor="#6B7280"
                     autoCapitalize="none"

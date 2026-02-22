@@ -25,6 +25,7 @@ export const VerifyOtpScreen: React.FC<VerifyOtpScreenProps> = ({ onBack, onCont
   const showRightPanel = width >= RIGHT_PANEL_MIN_WIDTH;
   const [digits, setDigits] = React.useState<string[]>(['', '', '', '', '', '']);
   const inputsRef = React.useRef<Array<TextInput | null>>([]);
+  const webNoOutline = Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : undefined;
 
   const setDigitAt = (index: number, value: string) => {
     const nextChar = value.replace(/[^0-9]/g, '').slice(-1);
@@ -77,7 +78,7 @@ export const VerifyOtpScreen: React.FC<VerifyOtpScreenProps> = ({ onBack, onCont
                     ref={(input) => {
                       inputsRef.current[index] = input;
                     }}
-                    style={[styles.otpInput, index === 0 && styles.otpInputActive]}
+                    style={[styles.otpInput, index === 0 && styles.otpInputActive, webNoOutline]}
                     value={digit}
                     onChangeText={(value) => setDigitAt(index, value)}
                     onKeyPress={({ nativeEvent }) => onKeyPress(index, nativeEvent.key)}
@@ -209,9 +210,13 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === 'web' ? 'Inter, system-ui, sans-serif' : undefined,
     fontWeight: '700',
     fontSize: 30,
-    lineHeight: 45,
+    lineHeight: 36,
     color: '#6B7280',
-    backgroundColor: '#FFFFFF'
+    backgroundColor: '#FFFFFF',
+    textAlign: 'center',
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    textAlignVertical: 'center'
   },
   otpInputActive: {
     borderColor: '#F67A34',

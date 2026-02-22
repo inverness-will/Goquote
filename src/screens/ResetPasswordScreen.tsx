@@ -26,6 +26,7 @@ export const ResetPasswordScreen: React.FC<ResetPasswordScreenProps> = ({ onBack
   const [confirmPassword, setConfirmPassword] = React.useState('');
   const [passwordVisible, setPasswordVisible] = React.useState(false);
   const [confirmPasswordVisible, setConfirmPasswordVisible] = React.useState(false);
+  const webNoOutline = Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : undefined;
 
   return (
     <KeyboardAvoidingView
@@ -60,7 +61,7 @@ export const ResetPasswordScreen: React.FC<ResetPasswordScreenProps> = ({ onBack
                   <View style={styles.inputWrapper}>
                     <Feather name="lock" size={16} color="#6B7280" />
                     <TextInput
-                      style={styles.input}
+                      style={[styles.input, webNoOutline]}
                       placeholder="••••••••••"
                       placeholderTextColor="#6B7280"
                       secureTextEntry={!passwordVisible}
@@ -79,7 +80,7 @@ export const ResetPasswordScreen: React.FC<ResetPasswordScreenProps> = ({ onBack
                   <View style={styles.inputWrapper}>
                     <Feather name="lock" size={16} color="#6B7280" />
                     <TextInput
-                      style={styles.input}
+                      style={[styles.input, webNoOutline]}
                       placeholder="••••••••••"
                       placeholderTextColor="#6B7280"
                       secureTextEntry={!confirmPasswordVisible}

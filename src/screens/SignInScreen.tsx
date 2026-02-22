@@ -31,6 +31,7 @@ export const SignInScreen: React.FC<SignInScreenProps> = ({
   const [passwordVisible, setPasswordVisible] = React.useState(false);
   const RIGHT_PANEL_MIN_WIDTH = 1120;
   const showRightPanel = width >= RIGHT_PANEL_MIN_WIDTH;
+  const webNoOutline = Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : undefined;
 
   const onContinue = () => {
     onSignIn?.(email, password);
@@ -80,7 +81,7 @@ export const SignInScreen: React.FC<SignInScreenProps> = ({
                   <View style={[styles.inputWrapper, emailFocused && styles.inputFocused]}>
                     <Feather name="mail" size={16} color="#484566" style={styles.inputIconLeft} />
                     <TextInput
-                      style={styles.inputWithIcon}
+                      style={[styles.inputWithIcon, webNoOutline]}
                       placeholder="Johndoe@email.com"
                       placeholderTextColor="#484566"
                       keyboardType="email-address"
@@ -99,7 +100,7 @@ export const SignInScreen: React.FC<SignInScreenProps> = ({
                   <View style={styles.inputWrapper}>
                     <Feather name="lock" size={16} color="#94A3B8" style={styles.inputIconLeft} />
                     <TextInput
-                      style={styles.inputWithIcon}
+                      style={[styles.inputWithIcon, webNoOutline]}
                       placeholder="••••••••••••"
                       placeholderTextColor="#64748B"
                       secureTextEntry={!passwordVisible}

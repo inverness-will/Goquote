@@ -35,6 +35,7 @@ export const SignUpScreen: React.FC<SignUpScreenProps> = ({ onSignIn, onSignUpSu
   const [confirmPasswordVisible, setConfirmPasswordVisible] = React.useState(false);
   const RIGHT_PANEL_MIN_WIDTH = 1120;
   const showRightPanel = width >= RIGHT_PANEL_MIN_WIDTH;
+  const webNoOutline = Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : undefined;
 
   const onContinue = () => {
     onSignUpSubmit?.({ fullName, email, password, confirmPassword, agreeTerms });
@@ -80,7 +81,7 @@ export const SignUpScreen: React.FC<SignUpScreenProps> = ({ onSignIn, onSignUpSu
                   <View style={styles.inputWrapper}>
                     <Feather name="user" size={16} color="#484566" style={styles.inputIconLeft} />
                     <TextInput
-                      style={styles.inputWithIcon}
+                      style={[styles.inputWithIcon, webNoOutline]}
                       placeholder="John Doe"
                       placeholderTextColor="#484566"
                       autoCapitalize="words"
@@ -95,7 +96,7 @@ export const SignUpScreen: React.FC<SignUpScreenProps> = ({ onSignIn, onSignUpSu
                   <View style={[styles.inputWrapper, emailFocused && styles.inputFocused]}>
                     <Feather name="mail" size={16} color="#484566" style={styles.inputIconLeft} />
                     <TextInput
-                      style={styles.inputWithIcon}
+                      style={[styles.inputWithIcon, webNoOutline]}
                       placeholder="Johndoe@email.com"
                       placeholderTextColor="#484566"
                       keyboardType="email-address"
@@ -116,7 +117,7 @@ export const SignUpScreen: React.FC<SignUpScreenProps> = ({ onSignIn, onSignUpSu
                     <View style={styles.inputWrapper}>
                       <Feather name="lock" size={16} color="#94A3B8" style={styles.inputIconLeft} />
                       <TextInput
-                        style={styles.inputWithIcon}
+                        style={[styles.inputWithIcon, webNoOutline]}
                         placeholder="••••••••••••"
                         placeholderTextColor="#64748B"
                         secureTextEntry={!passwordVisible}
@@ -142,7 +143,7 @@ export const SignUpScreen: React.FC<SignUpScreenProps> = ({ onSignIn, onSignUpSu
                     <View style={styles.inputWrapper}>
                       <Feather name="lock" size={16} color="#94A3B8" style={styles.inputIconLeft} />
                       <TextInput
-                        style={styles.inputWithIcon}
+                        style={[styles.inputWithIcon, webNoOutline]}
                         placeholder="••••••••••••"
                         placeholderTextColor="#64748B"
                         secureTextEntry={!confirmPasswordVisible}
