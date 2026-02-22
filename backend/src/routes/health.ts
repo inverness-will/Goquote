@@ -1,11 +1,5 @@
-import { Router } from 'express';
+import { Request, Response } from 'express';
 
-export const healthRouter = Router();
-
-healthRouter.get('/', (_req, res) => {
-  res.json({
-    status: 'ok',
-    service: 'goquote-backend',
-    timestamp: new Date().toISOString()
-  });
-});
+export const healthCheck = (req: Request, res: Response) => {
+    res.status(200).json({ status: 'UP' });
+};
