@@ -1,11 +1,7 @@
 import { createHash } from 'crypto';
 
-// Other imports and code
-
-function hashOtp(otp) {
+function hashOtp(otp: string): string {
   return createHash('sha256')
     .update(otp)
     .digest('hex');
 }
-
-// Other functions and code

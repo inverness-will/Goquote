@@ -1,32 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
+import { Router } from 'express';
 
-// ... other existing code here
+export const authRouter = Router();
 
-// Example route handler updated with type annotations
-
-// Line 64
-app.get('/example', (req: Request, res: Response, next: NextFunction) => {
-  // handler code
+authRouter.post('/login', (req: Request, res: Response, next: NextFunction) => {
+  // TODO: implement login
+  res.status(501).json({ message: 'Not implemented' });
 });
 
-// Line 88
-app.post('/example', (req: Request, res: Response, next: NextFunction) => {
-  // handler code
+authRouter.post('/register', (req: Request, res: Response, next: NextFunction) => {
+  // TODO: implement register
+  res.status(501).json({ message: 'Not implemented' });
 });
-
-// Line 115
-app.put('/example', (req: Request, res: Response, next: NextFunction) => {
-  // handler code
-});
-
-// Line 137
-app.delete('/example', (req: Request, res: Response, next: NextFunction) => {
-  // handler code
-});
-
-// Line 152
-app.patch('/example', (req: Request, res: Response, next: NextFunction) => {
-  // handler code
-});
-
-// ... other existing code here

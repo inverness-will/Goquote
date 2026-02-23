@@ -1,5 +1,5 @@
 import cors from 'cors';
-import express from 'express';
+import express, { Request, Response } from 'express';
 import { corsOrigins, env } from './config/env';
 import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
@@ -16,7 +16,7 @@ app.use(
 );
 app.use(express.json());
 
-app.get('/', (_req, res) => {
+app.get('/', (_req: Request, res: Response) => {
   res.json({
     name: 'GoQuote Backend API',
     version: '1.0.0'
