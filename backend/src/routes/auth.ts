@@ -8,6 +8,7 @@ import { prisma } from '../lib/prisma';
 import { env } from '../config/env';
 import { HttpError } from '../utils/httpError';
 import { generateOtp, getOtpExpiry } from '../services/authStore';
+import { sendPasswordResetEmail, sendVerificationEmail } from '../services/emailService';
 
 export const authRouter = Router();
 
@@ -70,6 +71,7 @@ authRouter.post('/signup', async (req: Request, res: Response, next: NextFunctio
         expiresAt: getOtpExpiry()
       }
     });
+    await sendVerificationEmail(user.email, plain, user.fullName);
     const response: { message: string; debugOtpCode?: string } = {
       message: 'Account created. Please verify your email with the code we sent you.'
     };
@@ -127,6 +129,7 @@ authRouter.post('/forgot-password', async (req: Request, res: Response, next: Ne
         expiresAt: getOtpExpiry()
       }
     });
+    await sendPasswordResetEmail(user.email, plain);
     const response: { message: string; debugOtpCode?: string } = {
       message: 'If an account exists for this email, you will receive a reset code.'
     };

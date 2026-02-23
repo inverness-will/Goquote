@@ -29,11 +29,16 @@ Default local URL: `http://localhost:4000`
 ## Notes
 
 - User and OTP data are persisted in PostgreSQL via Prisma.
-- Responses include `debugOtpCode` on signup/forgot-password to speed up testing.
-- Before production:
-  - Send OTP emails through a provider (Resend).
-  - Remove `debugOtpCode` from API responses.
-  - Add rate limiting and brute-force protection.
+- **Email verification & password reset:** When `RESEND_API_KEY` is set, the backend sends verification and password-reset emails via [Resend](https://resend.com). In development, if the key is not set, the API still returns `debugOtpCode` in the response so you can test without email.
+- Before production: add rate limiting and brute-force protection.
+
+## Email (Resend)
+
+To send verification and password-reset emails:
+
+1. Sign up at [resend.com](https://resend.com) and create an API key.
+2. Add to `.env`: `RESEND_API_KEY=re_xxxxxxxxxxxx`
+3. Optionally set `EMAIL_FROM` (default: `GoQuote <onboarding@resend.dev>`). For production, [verify your domain](https://resend.com/domains) and use an address like `noreply@yourdomain.com`.
 
 ## Prisma + Database
 

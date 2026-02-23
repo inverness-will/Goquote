@@ -8,7 +8,9 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(4000),
   JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 characters'),
   CORS_ORIGIN: z.string().default('http://localhost:8081'),
-  DATABASE_URL: z.string().url()
+  DATABASE_URL: z.string().url(),
+  RESEND_API_KEY: z.string().optional(),
+  EMAIL_FROM: z.string().default('GoQuote <onboarding@resend.dev>')
 });
 
 const parsed = envSchema.safeParse(process.env);
