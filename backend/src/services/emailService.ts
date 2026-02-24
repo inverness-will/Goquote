@@ -11,6 +11,7 @@ export async function sendVerificationEmail(
   code: string,
   fullName?: string
 ): Promise<{ ok: boolean; error?: string }> {
+  console.error('*** in the email code');
   if (!resend) return { ok: false, error: 'Email not configured' };
   const greeting = fullName ? `Hi ${fullName},` : 'Hi,';
   const { error } = await resend.emails.send({
@@ -32,6 +33,7 @@ export async function sendVerificationEmail(
 }
 
 export async function sendPasswordResetEmail(to: string, code: string): Promise<{ ok: boolean; error?: string }> {
+  console.error('*** in the email reset code');
   if (!resend) return { ok: false, error: 'Email not configured' };
   const { error } = await resend.emails.send({
     from: FROM,
