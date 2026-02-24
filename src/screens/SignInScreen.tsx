@@ -26,7 +26,6 @@ export const SignInScreen: React.FC<SignInScreenProps> = ({
   const { width } = useWindowDimensions();
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
-  const [agreeTerms, setAgreeTerms] = React.useState(false);
   const [emailFocused, setEmailFocused] = React.useState(false);
   const [passwordVisible, setPasswordVisible] = React.useState(false);
   const RIGHT_PANEL_MIN_WIDTH = 1120;
@@ -39,10 +38,6 @@ export const SignInScreen: React.FC<SignInScreenProps> = ({
 
   const handleSignUp = () => {
     onSignUp?.();
-  };
-
-  const onTermsPress = () => {
-    // TODO: Navigate to terms & privacy
   };
 
   return (
@@ -122,25 +117,9 @@ export const SignInScreen: React.FC<SignInScreenProps> = ({
                   </View>
                 </View>
 
-                {/* Terms row + Forgot password */}
+                {/* Forgot password */}
                 <View style={styles.termsRow}>
-                  <View style={styles.termsLeft}>
-                    <TouchableOpacity
-                      onPress={() => setAgreeTerms(!agreeTerms)}
-                      style={styles.checkbox}
-                      hitSlop={{ top: 8, bottom: 8, left: 0, right: 8 }}
-                    >
-                      <View style={[styles.checkboxBox, agreeTerms && styles.checkboxChecked]}>
-                        {agreeTerms && <View style={styles.checkmark} />}
-                      </View>
-                    </TouchableOpacity>
-                    <View style={styles.termsTextRow}>
-                      <Text style={styles.termsText}>I agree to the </Text>
-                      <TouchableOpacity onPress={onTermsPress}>
-                        <Text style={styles.termsLink}>Terms & Privacy</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
+                  <View style={styles.termsLeft} />
                   <TouchableOpacity onPress={onForgotPassword}>
                     <Text style={styles.forgotLink}>Forgot password?</Text>
                   </TouchableOpacity>
@@ -353,56 +332,7 @@ const styles = StyleSheet.create({
     paddingTop: 4
   },
   termsLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
     flex: 1
-  },
-  checkbox: {
-    flexDirection: 'row',
-    alignItems: 'center'
-  },
-  checkboxBox: {
-    width: 16,
-    height: 16,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#484566',
-    borderRadius: 2.5,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  checkboxChecked: {
-    backgroundColor: '#F67A34',
-    borderColor: '#F67A34'
-  },
-  checkmark: {
-    width: 5,
-    height: 9,
-    marginTop: -1,
-    borderBottomWidth: 2,
-    borderRightWidth: 2,
-    borderColor: '#FFFFFF',
-    transform: [{ rotate: '45deg' }]
-  },
-  termsTextRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    marginLeft: 8
-  },
-  termsText: {
-    fontFamily: Platform.OS === 'web' ? 'Inter, system-ui, sans-serif' : undefined,
-    fontWeight: '400',
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#484566'
-  },
-  termsLink: {
-    fontWeight: '400',
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#F67A34',
-    textDecorationLine: 'underline'
   },
   forgotLink: {
     fontFamily: Platform.OS === 'web' ? 'Inter, system-ui, sans-serif' : undefined,
