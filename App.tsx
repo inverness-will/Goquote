@@ -12,6 +12,7 @@ import { SignUpScreen } from './src/screens/SignUpScreen';
 import { ForgotPasswordScreen } from './src/screens/ForgotPasswordScreen';
 import { VerifyOtpScreen } from './src/screens/VerifyOtpScreen';
 import { ResetPasswordScreen } from './src/screens/ResetPasswordScreen';
+import { DashboardScreen } from './src/screens/DashboardScreen';
 import {
   forgotPassword,
   resetPassword,
@@ -23,11 +24,15 @@ import {
 type Screen = 'sign-in' | 'sign-up' | 'forgot-password' | 'verify-otp' | 'reset-password';
 type OtpFlow = 'signup' | 'password-reset';
 
+type AuthUser = { email: string; fullName: string; isEmailVerified: boolean };
+
 export default function App() {
   const [screen, setScreen] = useState<Screen>('sign-in');
   const [recoveryEmail, setRecoveryEmail] = useState('');
   const [recoveryCode, setRecoveryCode] = useState('');
   const [otpFlow, setOtpFlow] = useState<OtpFlow>('password-reset');
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [token, setToken] = useState<string | null>(null);
 
   const showPopup = (title: string, message: string) => {
     if (typeof globalThis.alert === 'function') {
@@ -47,6 +52,25 @@ export default function App() {
     return null;
   }
 
+  const handleSignOut = () => {
+    setUser(null);
+    setToken(null);
+    setScreen('sign-in');
+  };
+
+  if (user && token) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" />
+        <DashboardScreen
+          token={token}
+          user={{ email: user.email, fullName: user.fullName }}
+          onSignOut={handleSignOut}
+        />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
@@ -56,8 +80,9 @@ export default function App() {
           onForgotPassword={() => setScreen('forgot-password')}
           onSignIn={async (email, password) => {
             try {
-              await signIn({ email, password });
-              showPopup('Signed in', 'Sign-in succeeded.');
+              const res = await signIn({ email, password });
+              setUser(res.user);
+              setToken(res.token);
             } catch (error) {
               const message = error instanceof Error ? error.message : 'Sign-in failed.';
               showPopup('Sign-in failed', message);

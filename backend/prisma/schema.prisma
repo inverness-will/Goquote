@@ -12,6 +12,23 @@ enum OtpPurpose {
   PASSWORD_RESET
 }
 
+enum ProjectStatus {
+  DRAFT
+  FINALIZED
+}
+
+enum Currency {
+  USD
+  EURO
+  GBP
+}
+
+enum Transport {
+  FLY
+  DRIVE
+  TRAIN
+}
+
 model User {
   id              String    @id @default(cuid())
   email           String    @unique
@@ -21,6 +38,51 @@ model User {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   otpCodes        OtpCode[]
+  projects        Project[]
+}
+
+model Project {
+  id                    String         @id @default(cuid())
+  userId                String
+  user                  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                  String
+  status                ProjectStatus  @default(DRAFT)
+  route                 String?
+  location              String?
+  startDate             DateTime?
+  endDate               DateTime?
+  crew                  Int?
+  workdays              Int?
+  budgetCents           Int?           // stored in cents e.g. 12633800 = $126,338.00
+  currency              Currency?     @default(USD)
+  workSaturday          Boolean        @default(false)
+  workSunday            Boolean        @default(false)
+  transport             Transport?
+  jobSiteAddress        String?
+  originAddress         String?
+  originAirport         String?        // airport code e.g. AUS
+  destinationAirport   String?        // airport code e.g. DFW
+  hotelQuality          Int?          // 2..5 (star rating)
+  contingencyBudgetPct  Float?        // e.g. 10 = 10%
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  staff                 ProjectRole[]
+
+  @@index([userId])
+}
+
+model ProjectRole {
+  id                String   @id @default(cuid())
+  projectId         String
+  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title             String   // e.g. "Electrician", "Foreman"
+  hourlyRateCents   Int      // stored in cents
+  perDiemCents      Int      // stored in cents
+  hotelRoomSharing  Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([projectId])
 }
 
 model OtpCode {
