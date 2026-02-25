@@ -1,1 +1,1 @@
-{"expo":{"name":"Goquote","slug":"goquote","version":"1.0.0","sdkVersion":"40.0.0","platforms":["ios","android"],"ios":{"bundleIdentifier":"com.example.goquote"},"android":{"package":"com.example.goquote"},"web":{"favicon":"./assets/favicon.png"},"description":"A simple app for quoting."}}
+{\n  \"name\": \"Your App Name\",\n  \"description\": \"Your App Description\",\n  \"platforms\": [\n    \"ios\",\n    \"android\",\n    \"web\"\n  ]\n}
