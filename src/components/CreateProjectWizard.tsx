@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Feather } from '@expo/vector-icons';
+import WebDatePicker from './WebDatePicker';
 import type { CreateProjectPayload, Currency, Transport, Project } from '../services/projectsApi';
 
 function formatDateForDisplay(isoDate: string): string {
@@ -348,13 +349,9 @@ export function CreateProjectWizard({
                   <View style={styles.dateHalf}>
                     <Text style={styles.fieldLabel}>Start Date *</Text>
                     {isWeb ? (
-                      <TextInput
-                        style={styles.input}
+                      <WebDatePicker
                         value={form.startDate}
-                        onChangeText={(v) => setForm((f) => ({ ...f, startDate: v }))}
-                        placeholder="Select start date"
-                        placeholderTextColor="#94A3B8"
-                        {...(Platform.OS === 'web' && { type: 'date' as const })}
+                        onChange={(v) => setForm((f) => ({ ...f, startDate: v }))}
                       />
                     ) : (
                       <TouchableOpacity
@@ -372,13 +369,9 @@ export function CreateProjectWizard({
                   <View style={styles.dateHalf}>
                     <Text style={styles.fieldLabel}>End Date *</Text>
                     {isWeb ? (
-                      <TextInput
-                        style={styles.input}
+                      <WebDatePicker
                         value={form.endDate}
-                        onChangeText={(v) => setForm((f) => ({ ...f, endDate: v }))}
-                        placeholder="Select end date"
-                        placeholderTextColor="#94A3B8"
-                        {...(Platform.OS === 'web' && { type: 'date' as const })}
+                        onChange={(v) => setForm((f) => ({ ...f, endDate: v }))}
                       />
                     ) : (
                       <TouchableOpacity
