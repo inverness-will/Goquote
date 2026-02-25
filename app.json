@@ -1,1 +1,25 @@
-{\n  "name": "GoQuote Estimator",\n  "slug": "goquote-estimator",\n  "version": "1.0.0",\n  "platforms": [\n    "android",\n    "ios",\n    "web"\n  ],\n  "sdkVersion": "41.0.0",\n  "owner": "inverness-will",\n  "icon": "./assets/icon.png",\n  "splash": {\n    "image": "./assets/splash.png",\n    "resizeMode": "contain",\n    "backgroundColor": "#ffffff"\n  },\n  "updates": {\n    "fallbackToCacheTimeout": 0\n  },\n  "assetBundlePatterns": [\n    "**/*"\n  ],\n  "ios": {\n    "supportsTablet": true\n  },\n  "android": {\n    "adaptiveIcon": {\n      "foregroundImage": "./assets/adaptive-icon.png",\n      "backgroundColor": "#FFFFFF"\n    }\n  },\n  "web": {\n    "favicon": "./assets/favicon.png"\n  }\n}
+{
+  "expo": {
+    "name": "GoQuote Estimator",
+    "slug": "goquote-estimator-frontend",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "platforms": ["android", "ios", "web"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {},
+    "web": {},
+    "plugins": [
+      "expo-font",
+      "@react-native-community/datetimepicker"
+    ],
+    "experiments": {
+      "baseUrl": "/"
+    }
+  }
+}
