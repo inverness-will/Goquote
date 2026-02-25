@@ -9,7 +9,8 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
-  Modal as RNModal
+  Modal as RNModal,
+  useWindowDimensions
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Feather } from '@expo/vector-icons';
@@ -322,39 +323,43 @@ export function CreateProjectWizard({
 
   if (!visible) return null;
 
-  const completedCount = step; // steps 0..step-1 are "completed"
+  const { width: windowWidth } = useWindowDimensions();
+  const narrowWizard = windowWidth < 600;
+  const completedCount = step;
   const progressPct = (step / 5) * 100;
 
   return (
     <View style={styles.overlay} pointerEvents="box-none">
-      <View style={styles.modalBox}>
-        {/* Left Panel - Steps */}
-        <View style={styles.leftPanel}>
-          <Text style={styles.wizardTitle}>Project Setup Wizard</Text>
-          <View style={styles.stepperWrap}>
+      <View style={[styles.modalBox, narrowWizard && styles.modalBoxNarrow]}>
+        {/* Left Panel - Steps (collapsed on narrow to just progress + X/5) */}
+        <View style={[styles.leftPanel, narrowWizard && styles.leftPanelNarrow]}>
+          {!narrowWizard && <Text style={styles.wizardTitle}>Project Setup Wizard</Text>}
+          <View style={[styles.stepperWrap, narrowWizard && styles.stepperWrapNarrow]}>
             <View style={styles.stepperBg} />
             <View style={[styles.stepperFill, { width: `${progressPct}%` }]} />
           </View>
-          <Text style={styles.stepperText}>{completedCount}/5 completed</Text>
-          <View style={styles.stepList}>
-            {STEP_LABELS.map((label, i) => (
-              <View key={i} style={styles.stepRow}>
-                <View
-                  style={[
-                    styles.stepCircle,
-                    { backgroundColor: i <= step ? '#1BC685' : '#E5E7EB' }
-                  ]}
-                >
-                  {i <= step ? (
-                    <Feather name="check" size={14} color="#FFFFFF" />
-                  ) : (
-                    <View style={styles.stepCircleInner} />
-                  )}
+          <Text style={[styles.stepperText, narrowWizard && styles.stepperTextNarrow]}>{completedCount}/5 completed</Text>
+          {!narrowWizard && (
+            <View style={styles.stepList}>
+              {STEP_LABELS.map((label, i) => (
+                <View key={i} style={styles.stepRow}>
+                  <View
+                    style={[
+                      styles.stepCircle,
+                      { backgroundColor: i <= step ? '#1BC685' : '#E5E7EB' }
+                    ]}
+                  >
+                    {i <= step ? (
+                      <Feather name="check" size={14} color="#FFFFFF" />
+                    ) : (
+                      <View style={styles.stepCircleInner} />
+                    )}
+                  </View>
+                  <Text style={[styles.stepLabel, i === step && styles.stepLabelActive]}>{label}</Text>
                 </View>
-                <Text style={[styles.stepLabel, i === step && styles.stepLabelActive]}>{label}</Text>
-              </View>
-            ))}
-          </View>
+              ))}
+            </View>
+          )}
         </View>
 
         {/* Right Panel - Form */}
@@ -778,12 +783,30 @@ const styles = StyleSheet.create({
     shadowRadius: 50,
     elevation: 12
   },
+  modalBoxNarrow: {
+    flexDirection: 'column',
+    maxHeight: '95%'
+  },
   leftPanel: {
     width: 256,
     backgroundColor: '#F3F4F6',
     padding: 24,
     borderTopLeftRadius: 24,
     borderBottomLeftRadius: 24
+  },
+  leftPanelNarrow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0
   },
   wizardTitle: {
     fontFamily: Platform.OS === 'web' ? 'Inter, system-ui, sans-serif' : undefined,
@@ -799,6 +822,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     overflow: 'hidden',
     marginBottom: 6
+  },
+  stepperWrapNarrow: {
+    flex: 1,
+    marginBottom: 0
   },
   stepperBg: {
     ...StyleSheet.absoluteFillObject,
@@ -818,6 +845,9 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: '#484566',
     marginBottom: 16
+  },
+  stepperTextNarrow: {
+    marginBottom: 0
   },
   stepList: {
     gap: 16

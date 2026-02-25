@@ -25,6 +25,7 @@ const SIDEBAR_WIDTH = 256;
 const CARD_WIDTH = 385;
 const CARD_GAP = 20;
 const SIDEBAR_COLLAPSE_BREAKPOINT = SIDEBAR_WIDTH + CARD_WIDTH + CARD_GAP;
+const NARROW_LAYOUT_BREAKPOINT = 600;
 
 const STATUS_COLORS: Record<ProjectStatus, string> = {
   DRAFT: '#6B7280',
@@ -60,6 +61,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
   const { width: windowWidth } = useWindowDimensions();
   const sidebarCollapsed = windowWidth < SIDEBAR_COLLAPSE_BREAKPOINT;
+  const narrowLayout = windowWidth < NARROW_LAYOUT_BREAKPOINT;
 
   const fetchProjects = useCallback(async () => {
     try {
@@ -253,16 +255,20 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           <View style={styles.filterLeft}>
             <TouchableOpacity style={styles.filterBtn}>
               <Feather name="filter" size={16} color="#F67A34" />
-              <Text style={styles.filterBtnText}>Filter</Text>
+              {!narrowLayout && <Text style={styles.filterBtnText}>Filter</Text>}
             </TouchableOpacity>
-            <View style={styles.chip}>
-              <Text style={styles.chipText}>Status: Draft</Text>
-              <Feather name="x" size={16} color="#484566" />
-            </View>
-            <View style={styles.chip}>
-              <Text style={styles.chipText}>Status: Draft</Text>
-              <Feather name="x" size={16} color="#484566" />
-            </View>
+            {!narrowLayout && (
+              <>
+                <View style={styles.chip}>
+                  <Text style={styles.chipText}>Status: Draft</Text>
+                  <Feather name="x" size={16} color="#484566" />
+                </View>
+                <View style={styles.chip}>
+                  <Text style={styles.chipText}>Status: Draft</Text>
+                  <Feather name="x" size={16} color="#484566" />
+                </View>
+              </>
+            )}
           </View>
           <TouchableOpacity style={styles.addProjectBtn} onPress={openCreateModal}>
             <Feather name="plus" size={24} color="#F67A34" />
@@ -272,11 +278,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
         <ScrollView
           style={styles.cardsScroll}
-          contentContainerStyle={styles.cardsContainer}
+          contentContainerStyle={[styles.cardsContainer, narrowLayout && styles.cardsContainerNarrow]}
           showsVerticalScrollIndicator={true}
         >
           {loading ? (
-            <View style={styles.loadingWrap}>
+            <View style={[styles.loadingWrap, narrowLayout && styles.loadingWrapNarrow]}>
               <ActivityIndicator size="large" color="#F67A34" />
               <Text style={styles.loadingText}>Loading projects…</Text>
             </View>
@@ -289,7 +295,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 const workdaysStr = project.workdays != null ? `${project.workdays} workdays` : '—';
                 const budgetStr = formatBudget(project.budgetCents);
                 return (
-                  <View key={project.id} style={styles.card}>
+                  <View key={project.id} style={[styles.card, narrowLayout && styles.cardNarrow]}>
                     <View style={styles.cardTop}>
                       <View style={styles.cardTitleRow}>
                         <Feather name="folder" size={24} color="#1D2131" />
@@ -343,7 +349,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                   </View>
                 );
               })}
-              <TouchableOpacity style={styles.cardCreate} onPress={openCreateModal}>
+              <TouchableOpacity style={[styles.cardCreate, narrowLayout && styles.cardCreateNarrow]} onPress={openCreateModal}>
                 <View style={styles.cardCreateIconWrap}>
                   <Feather name="plus" size={24} color="#F67A34" />
                 </View>
@@ -749,6 +755,9 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 24,
     paddingBottom: 48
   },
+  cardsContainerNarrow: {
+    paddingHorizontal: 16
+  },
   card: {
     width: CARD_WIDTH,
     backgroundColor: '#FFFFFF',
@@ -757,6 +766,10 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 24,
     gap: 12
+  },
+  cardNarrow: {
+    width: '100%',
+    maxWidth: CARD_WIDTH
   },
   cardTop: {
     flexDirection: 'row',
@@ -878,6 +891,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12
   },
+  cardCreateNarrow: {
+    width: '100%',
+    maxWidth: CARD_WIDTH
+  },
   cardCreateIconWrap: {
     width: 48,
     height: 48,
@@ -900,6 +917,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12
+  },
+  loadingWrapNarrow: {
+    minWidth: 0
   },
   loadingText: {
     fontFamily: Platform.OS === 'web' ? 'Inter, system-ui, sans-serif' : undefined,
