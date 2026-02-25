@@ -1,15 +1,25 @@
 services:
+  # Backend API
   - type: web
-    name: goquote
+    name: goquote-api
     env: node
     plan: free
-    buildCommand: cd backend && npm install && npm run prisma:generate && npm run build && npm run prisma:deploy
-    startCommand: cd backend && npm start
+    rootDir: backend
+    buildCommand: npm install && npm run prisma:generate && npm run build && npm run prisma:deploy
+    startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL
         value: your-database-url-here
-    routes:
-      - path: /api
-        destination: /api
+      - key: CORS_ORIGIN
+        value: https://goquote.onrender.com
+
+  # Frontend (Static Site)
+  - type: static_site
+    name: goquote-web
+    buildCommand: npm install && npm run build:web
+    staticPublishDir: dist
+    envVars:
+      - key: EXPO_PUBLIC_API_BASE_URL
+        value: https://goquote-api.onrender.com
