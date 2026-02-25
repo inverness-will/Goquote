@@ -352,8 +352,9 @@ export function CreateProjectWizard({
                         style={styles.input}
                         value={form.startDate}
                         onChangeText={(v) => setForm((f) => ({ ...f, startDate: v }))}
-                        placeholder="YYYY-MM-DD (e.g. 2024-02-15)"
+                        placeholder="Select start date"
                         placeholderTextColor="#94A3B8"
+                        {...(Platform.OS === 'web' && { type: 'date' as const })}
                       />
                     ) : (
                       <TouchableOpacity
@@ -375,8 +376,9 @@ export function CreateProjectWizard({
                         style={styles.input}
                         value={form.endDate}
                         onChangeText={(v) => setForm((f) => ({ ...f, endDate: v }))}
-                        placeholder="YYYY-MM-DD (e.g. 2024-04-30)"
+                        placeholder="Select end date"
                         placeholderTextColor="#94A3B8"
+                        {...(Platform.OS === 'web' && { type: 'date' as const })}
                       />
                     ) : (
                       <TouchableOpacity

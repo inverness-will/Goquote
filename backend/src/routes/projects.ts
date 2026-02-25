@@ -154,10 +154,17 @@ projectsRouter.post('/', async (req: AuthRequest, res: Response, next: NextFunct
   }
 });
 
+function paramId(params: { id?: string | string[] }): string {
+  const raw = params.id;
+  const id = typeof raw === 'string' ? raw : raw?.[0];
+  if (!id) throw new HttpError(400, 'Invalid project id');
+  return id;
+}
+
 projectsRouter.patch('/:id', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const userId = req.userId!;
-    const id = req.params.id;
+    const id = paramId(req.params);
     const body = updateProjectSchema.parse(req.body);
     const existing = await prisma.project.findFirst({ where: { id, userId } });
     if (!existing) {
@@ -219,7 +226,7 @@ projectsRouter.patch('/:id', async (req: AuthRequest, res: Response, next: NextF
 projectsRouter.delete('/:id', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const userId = req.userId!;
-    const id = req.params.id;
+    const id = paramId(req.params);
     const existing = await prisma.project.findFirst({ where: { id, userId } });
     if (!existing) {
       throw new HttpError(404, 'Project not found.');

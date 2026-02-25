@@ -127,9 +127,10 @@ export async function deleteProject(token: string, id: string): Promise<void> {
       Authorization: `Bearer ${token}`
     }
   });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) {
-    const message = payload?.message || `Request failed with status ${response.status}`;
-    throw new Error(message);
+  if (response.ok) {
+    return; // 204 No Content has no body
   }
+  const payload = await response.json().catch(() => null);
+  const message = payload?.message || `Request failed with status ${response.status}`;
+  throw new Error(message);
 }
