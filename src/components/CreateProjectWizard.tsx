@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,50 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Feather } from '@expo/vector-icons';
 import type { CreateProjectPayload, Currency, Transport, Project } from '../services/projectsApi';
+
+/** Web-only: renders a native <input type="date"> so the browser date picker works. RNW TextInput overwrites type. */
+function WebDateInput({
+  value,
+  onChange,
+  placeholder,
+  style
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  style?: object;
+}) {
+  const containerRef = useRef<View>(null);
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const el = containerRef.current as unknown as HTMLElement | null;
+    if (!el) return;
+    const input = document.createElement('input');
+    input.type = 'date';
+    input.value = value || '';
+    input.placeholder = placeholder || '';
+    input.style.cssText = [
+      'width:100%;height:100%;min-height:48px;border:none;outline:none;background:transparent;',
+      'font-size:14px;color:#1D2131;font-family:Inter,system-ui,sans-serif;',
+      'padding:0;margin:0;box-sizing:border-box;'
+    ].join(' ');
+    const onInput = () => onChange(input.value || '');
+    input.addEventListener('change', onInput);
+    el.appendChild(input);
+    return () => {
+      input.removeEventListener('change', onInput);
+      el.removeChild(input);
+    };
+  }, [placeholder]);
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const el = containerRef.current as unknown as HTMLElement | null;
+    if (!el) return;
+    const input = el.querySelector('input');
+    if (input && input.value !== (value || '')) input.value = value || '';
+  }, [value]);
+  return <View ref={containerRef} style={[{ minHeight: 48 }, style]} collapsable={false} />;
+}
 
 function formatDateForDisplay(isoDate: string): string {
   if (!isoDate.trim()) return '';
@@ -348,13 +392,11 @@ export function CreateProjectWizard({
                   <View style={styles.dateHalf}>
                     <Text style={styles.fieldLabel}>Start Date *</Text>
                     {isWeb ? (
-                      <TextInput
-                        style={styles.input}
+                      <WebDateInput
                         value={form.startDate}
-                        onChangeText={(v) => setForm((f) => ({ ...f, startDate: v }))}
+                        onChange={(v) => setForm((f) => ({ ...f, startDate: v }))}
                         placeholder="Select start date"
-                        placeholderTextColor="#94A3B8"
-                        {...(Platform.OS === 'web' && { type: 'date' as const })}
+                        style={[styles.input, styles.webDateInput]}
                       />
                     ) : (
                       <TouchableOpacity
@@ -372,13 +414,11 @@ export function CreateProjectWizard({
                   <View style={styles.dateHalf}>
                     <Text style={styles.fieldLabel}>End Date *</Text>
                     {isWeb ? (
-                      <TextInput
-                        style={styles.input}
+                      <WebDateInput
                         value={form.endDate}
-                        onChangeText={(v) => setForm((f) => ({ ...f, endDate: v }))}
+                        onChange={(v) => setForm((f) => ({ ...f, endDate: v }))}
                         placeholder="Select end date"
-                        placeholderTextColor="#94A3B8"
-                        {...(Platform.OS === 'web' && { type: 'date' as const })}
+                        style={[styles.input, styles.webDateInput]}
                       />
                     ) : (
                       <TouchableOpacity
@@ -887,6 +927,9 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     color: '#6B7280',
     marginTop: -4
+  },
+  webDateInput: {
+    cursor: Platform.OS === 'web' ? 'pointer' : undefined
   },
   dateRow: {
     flexDirection: 'row',

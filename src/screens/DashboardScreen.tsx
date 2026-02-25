@@ -8,7 +8,8 @@ import {
   Platform,
   Modal,
   ActivityIndicator,
-  Alert
+  Alert,
+  useWindowDimensions
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { getProjects, createProject, updateProject, deleteProject, type Project, type ProjectStatus, type CreateProjectPayload } from '../services/projectsApi';
@@ -23,6 +24,7 @@ export interface DashboardScreenProps {
 const SIDEBAR_WIDTH = 256;
 const CARD_WIDTH = 385;
 const CARD_GAP = 20;
+const SIDEBAR_COLLAPSE_BREAKPOINT = SIDEBAR_WIDTH + CARD_WIDTH + CARD_GAP;
 
 const STATUS_COLORS: Record<ProjectStatus, string> = {
   DRAFT: '#6B7280',
@@ -54,6 +56,10 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [menuProject, setMenuProject] = useState<Project | null>(null);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const { width: windowWidth } = useWindowDimensions();
+  const sidebarCollapsed = windowWidth < SIDEBAR_COLLAPSE_BREAKPOINT;
 
   const fetchProjects = useCallback(async () => {
     try {
@@ -146,85 +152,94 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const displayName = user?.fullName?.split(/\s+/)[0] + ' ' + (user?.fullName?.split(/\s+/)[1]?.[0] ?? '') || 'Jason D';
   const displayEmail = user?.email ?? 'jason.duong@gmail.com';
 
-  return (
-    <View style={styles.page}>
-      {/* Left Sidebar */}
-      <View style={styles.sidebar}>
-        <View style={styles.logoSection}>
-          <View style={styles.logoRow}>
-            <View style={styles.logoSquare} />
-            <Text style={styles.brandGoQuote}>GoQuote</Text>
-            <Text style={styles.brandEstimator}> Estimator</Text>
-          </View>
-        </View>
-
-        <View style={styles.mainNav}>
-          <TouchableOpacity style={[styles.navItem, styles.navItemActive]}>
-            <Feather name="layout" size={18} color="#1D2131" />
-            <Text style={[styles.navLabel, styles.navLabelActive]}>Dashboard</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem}>
-            <Feather name="credit-card" size={18} color="#6B7280" />
-            <Text style={styles.navLabel}>Subscription</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.navItemRow}>
-            <View style={styles.navItemLeft}>
-              <Feather name="user" size={18} color="#6B7280" />
-              <Text style={styles.navLabel}>Account & Billing</Text>
-            </View>
-            <Feather name="chevron-down" size={18} color="#6B7280" />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.divider} />
-
-        <View style={styles.activeSection}>
-          <Text style={styles.sectionLabel}>ACTIVE PROJECTS</Text>
-          {sidebarProjects.map((p, i) => (
-            <TouchableOpacity key={i} style={styles.projectRow}>
-              <View style={[styles.projectDot, { backgroundColor: p.dotColor }]} />
-              <Text style={styles.projectRowName} numberOfLines={1}>{p.name}</Text>
-              <Feather name="more-horizontal" size={16} color="#1D2131" />
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <View style={styles.divider} />
-
-        <View style={styles.mainNav}>
-          <TouchableOpacity style={styles.navItem}>
-            <Feather name="settings" size={18} color="#6B7280" />
-            <Text style={styles.navLabel}>Settings & Defaults</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem}>
-            <Feather name="help-circle" size={18} color="#6B7280" />
-            <Text style={styles.navLabel}>Support & Help</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.divider} />
-
-        <View style={styles.userSection}>
-          <View style={styles.userRow}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{initials}</Text>
-              <View style={styles.statusOnline} />
-            </View>
-            <View style={styles.userInfo}>
-              <Text style={styles.userName}>{displayName}</Text>
-              <Text style={styles.userEmail} numberOfLines={1}>{displayEmail}</Text>
-            </View>
-            <TouchableOpacity onPress={onSignOut} hitSlop={8}>
-              <Feather name="log-out" size={18} color="#6B7280" />
-            </TouchableOpacity>
-          </View>
+  const sidebarContent = (
+    <>
+      <View style={styles.logoSection}>
+        <View style={styles.logoRow}>
+          <View style={styles.logoSquare} />
+          <Text style={styles.brandGoQuote}>GoQuote</Text>
+          <Text style={styles.brandEstimator}> Estimator</Text>
         </View>
       </View>
+
+      <View style={styles.mainNav}>
+        <TouchableOpacity style={[styles.navItem, styles.navItemActive]}>
+          <Feather name="layout" size={18} color="#1D2131" />
+          <Text style={[styles.navLabel, styles.navLabelActive]}>Dashboard</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navItem}>
+          <Feather name="credit-card" size={18} color="#6B7280" />
+          <Text style={styles.navLabel}>Subscription</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navItemRow}>
+          <View style={styles.navItemLeft}>
+            <Feather name="user" size={18} color="#6B7280" />
+            <Text style={styles.navLabel}>Account & Billing</Text>
+          </View>
+          <Feather name="chevron-down" size={18} color="#6B7280" />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.divider} />
+
+      <View style={styles.activeSection}>
+        <Text style={styles.sectionLabel}>ACTIVE PROJECTS</Text>
+        {sidebarProjects.map((p, i) => (
+          <TouchableOpacity key={i} style={styles.projectRow}>
+            <View style={[styles.projectDot, { backgroundColor: p.dotColor }]} />
+            <Text style={styles.projectRowName} numberOfLines={1}>{p.name}</Text>
+            <Feather name="more-horizontal" size={16} color="#1D2131" />
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <View style={styles.divider} />
+
+      <View style={styles.mainNav}>
+        <TouchableOpacity style={styles.navItem}>
+          <Feather name="settings" size={18} color="#6B7280" />
+          <Text style={styles.navLabel}>Settings & Defaults</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navItem}>
+          <Feather name="help-circle" size={18} color="#6B7280" />
+          <Text style={styles.navLabel}>Support & Help</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.divider} />
+
+      <View style={styles.userSection}>
+        <View style={styles.userRow}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{initials}</Text>
+            <View style={styles.statusOnline} />
+          </View>
+          <View style={styles.userInfo}>
+            <Text style={styles.userName}>{displayName}</Text>
+            <Text style={styles.userEmail} numberOfLines={1}>{displayEmail}</Text>
+          </View>
+          <TouchableOpacity onPress={onSignOut} hitSlop={8}>
+            <Feather name="log-out" size={18} color="#6B7280" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    </>
+  );
+
+  return (
+    <View style={styles.page}>
+      {/* Left Sidebar - hidden when collapsed */}
+      {!sidebarCollapsed && <View style={styles.sidebar}>{sidebarContent}</View>}
 
       {/* Main content */}
       <View style={styles.main}>
         <View style={styles.headerBar}>
           <View style={styles.headerRow}>
+            {sidebarCollapsed ? (
+              <TouchableOpacity onPress={() => setSidebarOpen(true)} style={styles.hamburgerBtn} hitSlop={8}>
+                <Feather name="menu" size={24} color="#1D2131" />
+              </TouchableOpacity>
+            ) : null}
             <Feather name="layout" size={18} color="#1D2131" />
             <View style={styles.headerDivider} />
             <View>
@@ -386,6 +401,28 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Collapsed sidebar overlay */}
+      <Modal
+        visible={sidebarCollapsed && sidebarOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSidebarOpen(false)}
+      >
+        <View style={styles.sidebarOverlay}>
+          <View style={styles.sidebarPanel} pointerEvents="box-none">
+            <TouchableOpacity style={styles.sidebarCloseBtn} onPress={() => setSidebarOpen(false)} hitSlop={8}>
+              <Feather name="x" size={24} color="#6B7280" />
+            </TouchableOpacity>
+            {sidebarContent}
+          </View>
+          <TouchableOpacity
+            style={styles.sidebarBackdrop}
+            activeOpacity={1}
+            onPress={() => setSidebarOpen(false)}
+          />
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -402,6 +439,30 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     paddingVertical: 16,
     alignItems: 'center'
+  },
+  hamburgerBtn: {
+    padding: 4,
+    marginRight: 4
+  },
+  sidebarOverlay: {
+    flex: 1,
+    flexDirection: 'row'
+  },
+  sidebarPanel: {
+    width: SIDEBAR_WIDTH,
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 16,
+    alignItems: 'center'
+  },
+  sidebarCloseBtn: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    zIndex: 1
+  },
+  sidebarBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.3)'
   },
   logoSection: {
     padding: 16,
