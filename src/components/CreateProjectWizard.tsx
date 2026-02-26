@@ -280,9 +280,11 @@ export function CreateProjectWizard({
       workSunday: form.workSunday,
       transport: form.transport ?? undefined,
       jobSiteAddress: form.jobSiteAddress.trim() || undefined,
-      originAddress: form.originAddress.trim() || undefined,
-      originAirport: form.originAirport.trim() || undefined,
-      destinationAirport: form.destinationAirport.trim() || undefined,
+      ...((form.transport === 'DRIVE' || form.transport === 'TRAIN') && { originAddress: form.originAddress.trim() || undefined }),
+      ...(form.transport === 'FLY' && {
+        originAirport: form.originAirport.trim() || undefined,
+        destinationAirport: form.destinationAirport.trim() || undefined
+      }),
       hotelQuality: form.hotelQuality ? parseInt(form.hotelQuality, 10) : undefined,
       contingencyBudgetPct: form.contingencyBudgetPct,
       staff: staffPayload.length ? staffPayload : undefined
@@ -618,7 +620,8 @@ export function CreateProjectWizard({
                       activeOpacity={1}
                       onPress={() => setRolePickerOpen(false)}
                     />
-                    <View style={styles.rolePickerModal}>
+                    <View style={styles.rolePickerModalWrap}>
+                      <View style={styles.rolePickerModal}>
                       <Text style={styles.rolePickerTitle}>Choose from previous roles</Text>
                       <ScrollView style={styles.rolePickerList}>
                         {previousRoles.length === 0 ? (
@@ -644,6 +647,7 @@ export function CreateProjectWizard({
                       <TouchableOpacity style={styles.rolePickerCancel} onPress={() => setRolePickerOpen(false)}>
                         <Text style={styles.rolePickerCancelText}>Cancel</Text>
                       </TouchableOpacity>
+                    </View>
                     </View>
                   </RNModal>
                 )}
@@ -695,14 +699,18 @@ export function CreateProjectWizard({
                   placeholderTextColor="#94A3B8"
                 />
                 <Text style={styles.helperText}>Used for calculating travel and lodging costs</Text>
-                <Text style={styles.fieldLabel}>Origin Address *</Text>
-                <TextInput
-                  style={styles.input}
-                  value={form.originAddress}
-                  onChangeText={(v) => setForm((f) => ({ ...f, originAddress: v }))}
-                  placeholder="Address"
-                  placeholderTextColor="#94A3B8"
-                />
+                {(form.transport === 'DRIVE' || form.transport === 'TRAIN') && (
+                  <>
+                    <Text style={styles.fieldLabel}>Origin Address *</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={form.originAddress}
+                      onChangeText={(v) => setForm((f) => ({ ...f, originAddress: v }))}
+                      placeholder="Address"
+                      placeholderTextColor="#94A3B8"
+                    />
+                  </>
+                )}
                 {form.transport === 'FLY' && (
                   <>
                     <Text style={styles.fieldLabel}>Origin airport</Text>
@@ -1170,16 +1178,24 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.4)'
   },
-  rolePickerModal: {
-    position: 'absolute',
-    left: 24,
-    right: 24,
-    bottom: 0,
-    maxHeight: '70%',
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+  rolePickerModalWrap: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
     padding: 24
+  },
+  rolePickerModal: {
+    width: 360,
+    maxWidth: '100%',
+    maxHeight: '80%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    shadowOpacity: 0.2,
+    elevation: 8
   },
   rolePickerTitle: {
     fontFamily: Platform.OS === 'web' ? 'Inter, system-ui, sans-serif' : undefined,
