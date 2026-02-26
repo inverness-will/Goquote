@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { getProjects, createProject, updateProject, deleteProject, type Project, type ProjectStatus, type CreateProjectPayload } from '../services/projectsApi';
-import { CreateProjectWizard } from '../components/CreateProjectWizard';
+import { CreateProjectWizard, type PreviousRole } from '../components/CreateProjectWizard';
 
 export interface DashboardScreenProps {
   token: string;
@@ -160,6 +160,26 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       setSubmitting(false);
     }
   };
+
+  const previousRoles = useMemo((): PreviousRole[] => {
+    const seen = new Set<string>();
+    const out: PreviousRole[] = [];
+    projects.forEach((p) => {
+      (p.staff || []).forEach((s) => {
+        const key = `${s.title}|${s.hourlyRateCents}|${s.perDiemCents}|${s.hotelRoomSharing}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          out.push({
+            title: s.title,
+            hourlyRateCents: s.hourlyRateCents,
+            perDiemCents: s.perDiemCents,
+            hotelRoomSharing: s.hotelRoomSharing
+          });
+        }
+      });
+    });
+    return out;
+  }, [projects]);
 
   const sidebarProjects = projects.slice(0, 3).map((p) => ({
     name: p.name.length > 20 ? p.name.slice(0, 17) + '…' : p.name,
@@ -400,6 +420,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           onSubmit={handleWizardSubmit}
           submitting={submitting}
           initialProject={editingProject}
+          previousRoles={previousRoles}
         />
       </Modal>
 

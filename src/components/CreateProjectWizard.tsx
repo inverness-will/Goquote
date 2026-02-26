@@ -86,9 +86,17 @@ const STEP_LABELS = [
   'Per Diem & Risk'
 ];
 
+export type PreviousRole = {
+  title: string;
+  hourlyRateCents: number;
+  perDiemCents: number;
+  hotelRoomSharing: boolean;
+};
+
 export type WizardFormRole = {
   id: string;
   title: string;
+  count: number;
   hourlyRateDollars: string;
   perDiemDollars: string;
   hotelRoomSharing: boolean;
@@ -149,6 +157,8 @@ export interface CreateProjectWizardProps {
   submitting: boolean;
   /** When set, wizard is in edit mode: form is prefilled and submit button says "Save changes". */
   initialProject?: Project | null;
+  /** Roles from other projects the user can pick to fill title + rates. */
+  previousRoles?: PreviousRole[];
 }
 
 function useId() {
@@ -160,6 +170,7 @@ function projectToFormState(p: Project): WizardFormState {
   const staff: WizardFormRole[] = (p.staff || []).map((s) => ({
     id: s.id,
     title: s.title,
+    count: 1,
     hourlyRateDollars: (s.hourlyRateCents / 100).toString(),
     perDiemDollars: (s.perDiemCents / 100).toString(),
     hotelRoomSharing: s.hotelRoomSharing
@@ -195,11 +206,13 @@ export function CreateProjectWizard({
   onClose,
   onSubmit,
   submitting,
-  initialProject
+  initialProject,
+  previousRoles = []
 }: CreateProjectWizardProps) {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<WizardFormState>(defaultFormState);
   const [datePickerOpen, setDatePickerOpen] = useState<'start' | 'end' | null>(null);
+  const [rolePickerOpen, setRolePickerOpen] = useState(false);
   const nextId = useId();
 
   React.useEffect(() => {
@@ -242,14 +255,19 @@ export function CreateProjectWizard({
   };
 
   const buildPayload = (): CreateProjectPayload => {
-    const staffPayload = form.staff
+    const staffPayload: Array<{ title: string; hourlyRateCents: number; perDiemCents: number; hotelRoomSharing: boolean }> = [];
+    form.staff
       .filter((r) => r.title.trim())
-      .map((r) => ({
-        title: r.title.trim(),
-        hourlyRateCents: Math.round(parseFloat(r.hourlyRateDollars || '0') * 100),
-        perDiemCents: Math.round(parseFloat(r.perDiemDollars || '0') * 100),
-        hotelRoomSharing: !form.singleRoomRoleIds.includes(r.id)
-      }));
+      .forEach((r) => {
+        const count = Math.max(1, Math.min(999, r.count || 1));
+        const entry = {
+          title: r.title.trim(),
+          hourlyRateCents: Math.round(parseFloat(r.hourlyRateDollars || '0') * 100),
+          perDiemCents: Math.round(parseFloat(r.perDiemDollars || '0') * 100),
+          hotelRoomSharing: !form.singleRoomRoleIds.includes(r.id)
+        };
+        for (let i = 0; i < count; i++) staffPayload.push(entry);
+      });
     return {
       name: form.name.trim(),
       status: 'DRAFT',
@@ -293,9 +311,27 @@ export function CreateProjectWizard({
         {
           id: nextId(),
           title: '',
+          count: 1,
           hourlyRateDollars: '',
           perDiemDollars: '',
           hotelRoomSharing: true
+        }
+      ]
+    }));
+  };
+
+  const addRoleFromPrevious = (prev: PreviousRole) => {
+    setForm((f) => ({
+      ...f,
+      staff: [
+        ...f.staff,
+        {
+          id: nextId(),
+          title: prev.title,
+          count: 1,
+          hourlyRateDollars: (prev.hourlyRateCents / 100).toFixed(2),
+          perDiemDollars: (prev.perDiemCents / 100).toFixed(2),
+          hotelRoomSharing: prev.hotelRoomSharing
         }
       ]
     }));
@@ -540,6 +576,20 @@ export function CreateProjectWizard({
                       placeholder="Role title"
                       placeholderTextColor="#94A3B8"
                     />
+                    <View style={styles.roleCountWrap}>
+                      <Text style={styles.roleCountLabel}>#</Text>
+                      <TextInput
+                        style={[styles.input, styles.roleCount]}
+                        value={String(r.count ?? 1)}
+                        onChangeText={(v) => {
+                          const n = parseInt(v, 10);
+                          updateRole(r.id, { count: v === '' ? 1 : isNaN(n) || n < 1 ? 1 : Math.min(999, n) });
+                        }}
+                        placeholder="1"
+                        placeholderTextColor="#94A3B8"
+                        keyboardType="number-pad"
+                      />
+                    </View>
                     <TextInput
                       style={[styles.input, styles.roleNum]}
                       value={r.hourlyRateDollars}
@@ -561,10 +611,52 @@ export function CreateProjectWizard({
                     </TouchableOpacity>
                   </View>
                 ))}
-                <TouchableOpacity style={styles.addRoleBtn} onPress={addRole}>
-                  <Feather name="plus" size={16} color="#F67A34" />
-                  <Text style={styles.addRoleText}>Add role</Text>
-                </TouchableOpacity>
+                {rolePickerOpen && (
+                  <RNModal visible transparent animationType="fade">
+                    <TouchableOpacity
+                      style={styles.rolePickerOverlay}
+                      activeOpacity={1}
+                      onPress={() => setRolePickerOpen(false)}
+                    />
+                    <View style={styles.rolePickerModal}>
+                      <Text style={styles.rolePickerTitle}>Choose from previous roles</Text>
+                      <ScrollView style={styles.rolePickerList}>
+                        {previousRoles.length === 0 ? (
+                          <Text style={styles.rolePickerEmpty}>No previous roles yet. Create roles and they’ll appear here.</Text>
+                        ) : (
+                          previousRoles.map((prev, idx) => (
+                            <TouchableOpacity
+                              key={`${prev.title}-${idx}`}
+                              style={styles.rolePickerOption}
+                              onPress={() => {
+                                addRoleFromPrevious(prev);
+                                setRolePickerOpen(false);
+                              }}
+                            >
+                              <Text style={styles.rolePickerOptionText}>{prev.title}</Text>
+                              <Text style={styles.rolePickerOptionSub}>
+                                ${(prev.hourlyRateCents / 100).toFixed(0)}/hr · ${(prev.perDiemCents / 100).toFixed(0)} per diem
+                              </Text>
+                            </TouchableOpacity>
+                          ))
+                        )}
+                      </ScrollView>
+                      <TouchableOpacity style={styles.rolePickerCancel} onPress={() => setRolePickerOpen(false)}>
+                        <Text style={styles.rolePickerCancelText}>Cancel</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </RNModal>
+                )}
+                <View style={styles.addRoleRow}>
+                  <TouchableOpacity style={styles.addRoleBtn} onPress={addRole}>
+                    <Feather name="plus" size={16} color="#F67A34" />
+                    <Text style={styles.addRoleText}>Add new role</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.addRoleBtn} onPress={() => setRolePickerOpen(true)}>
+                    <Feather name="plus" size={16} color="#F67A34" />
+                    <Text style={styles.addRoleText}>Add existing role</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             )}
 
@@ -1053,11 +1145,90 @@ const styles = StyleSheet.create({
   roleTitle: {
     flex: 2
   },
+  roleCountWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: 56
+  },
+  roleCountLabel: {
+    fontFamily: Platform.OS === 'web' ? 'Inter, system-ui, sans-serif' : undefined,
+    fontSize: 12,
+    color: '#6B7280',
+    marginRight: 4
+  },
+  roleCount: {
+    flex: 1,
+    minWidth: 40
+  },
   roleNum: {
     width: 80
   },
   roleRemove: {
     padding: 8
+  },
+  rolePickerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.4)'
+  },
+  rolePickerModal: {
+    position: 'absolute',
+    left: 24,
+    right: 24,
+    bottom: 0,
+    maxHeight: '70%',
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24
+  },
+  rolePickerTitle: {
+    fontFamily: Platform.OS === 'web' ? 'Inter, system-ui, sans-serif' : undefined,
+    fontWeight: '600',
+    fontSize: 16,
+    color: '#1D2131',
+    marginBottom: 12
+  },
+  rolePickerList: {
+    maxHeight: 280
+  },
+  rolePickerOption: {
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6'
+  },
+  rolePickerOptionText: {
+    fontFamily: Platform.OS === 'web' ? 'Inter, system-ui, sans-serif' : undefined,
+    fontSize: 16,
+    color: '#1D2131'
+  },
+  rolePickerOptionSub: {
+    fontFamily: Platform.OS === 'web' ? 'Inter, system-ui, sans-serif' : undefined,
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2
+  },
+  rolePickerEmpty: {
+    fontFamily: Platform.OS === 'web' ? 'Inter, system-ui, sans-serif' : undefined,
+    fontSize: 14,
+    color: '#6B7280',
+    padding: 16
+  },
+  rolePickerCancel: {
+    marginTop: 16,
+    paddingVertical: 12,
+    alignItems: 'center'
+  },
+  rolePickerCancelText: {
+    fontFamily: Platform.OS === 'web' ? 'Inter, system-ui, sans-serif' : undefined,
+    fontSize: 16,
+    color: '#6B7280'
+  },
+  addRoleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    flexWrap: 'wrap'
   },
   addRoleBtn: {
     flexDirection: 'row',
