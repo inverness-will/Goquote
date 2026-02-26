@@ -47,8 +47,8 @@ model Project {
   user                  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   name                  String
   status                ProjectStatus  @default(DRAFT)
-  route                 String?
-  location              String?
+  route                 String?        // @deprecated – use jobSiteAddress instead
+  location              String?        // @deprecated – use jobSiteAddress instead
   startDate             DateTime?
   endDate               DateTime?
   crew                  Int?

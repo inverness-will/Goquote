@@ -17,7 +17,9 @@ export type Project = {
   id: string;
   name: string;
   status: ProjectStatus;
+  /** @deprecated Use jobSiteAddress instead */
   route: string | null;
+  /** @deprecated Use jobSiteAddress instead */
   location: string | null;
   startDate: string | null;
   endDate: string | null;
@@ -49,7 +51,9 @@ export type CreateProjectRolePayload = {
 export type CreateProjectPayload = {
   name: string;
   status?: ProjectStatus;
+  /** @deprecated Use jobSiteAddress instead */
   route?: string;
+  /** @deprecated Use jobSiteAddress instead */
   location?: string;
   startDate?: string;
   endDate?: string;
