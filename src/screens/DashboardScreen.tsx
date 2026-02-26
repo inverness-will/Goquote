@@ -19,6 +19,7 @@ export interface DashboardScreenProps {
   token: string;
   user?: { email: string; fullName: string };
   onSignOut?: () => void;
+  onOpenDebug?: () => void;
 }
 
 const SIDEBAR_WIDTH = 256;
@@ -46,10 +47,27 @@ function formatBudget(cents: number | null): string {
   return '$' + (cents / 100).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
+function formatRouteDisplay(project: Project): string {
+  if (project.transport === 'FLY') {
+    const origin = project.originAirport?.trim() || '';
+    const dest = project.destinationAirport?.trim() || '';
+    if (origin && dest) return `${origin} to ${dest}`;
+    if (origin) return origin;
+    if (dest) return dest;
+    return '—';
+  }
+  const addr = project.jobSiteAddress?.trim();
+  if (!addr) return '—';
+  const parts = addr.split(',').map((p) => p.trim()).filter(Boolean);
+  if (parts.length >= 2) return `${parts[parts.length - 2]}, ${parts[parts.length - 1]}`;
+  return parts[0] || '—';
+}
+
 export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   token,
   user,
-  onSignOut
+  onSignOut,
+  onOpenDebug
 }) => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -129,11 +147,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       if (editingProject) {
         await updateProject(token, editingProject.id, payload);
         setEditingProject(null);
-        closeCreateModal();
       } else {
         await createProject(token, payload);
       }
       await fetchProjects();
+      closeCreateModal();
     } catch (e) {
       const message = e instanceof Error ? e.message : (editingProject ? 'Failed to update project' : 'Failed to create project');
       Alert.alert('Error', message);
@@ -154,14 +172,24 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const displayName = user?.fullName?.split(/\s+/)[0] + ' ' + (user?.fullName?.split(/\s+/)[1]?.[0] ?? '') || 'Jason D';
   const displayEmail = user?.email ?? 'jason.duong@gmail.com';
 
+  const logoRow = (
+    <View style={styles.logoRow}>
+      <View style={styles.logoSquare} />
+      <Text style={styles.brandGoQuote}>GoQuote</Text>
+      <Text style={styles.brandEstimator}> Estimator</Text>
+    </View>
+  );
+
   const sidebarContent = (
     <>
       <View style={styles.logoSection}>
-        <View style={styles.logoRow}>
-          <View style={styles.logoSquare} />
-          <Text style={styles.brandGoQuote}>GoQuote</Text>
-          <Text style={styles.brandEstimator}> Estimator</Text>
-        </View>
+        {onOpenDebug ? (
+          <TouchableOpacity onPress={onOpenDebug} activeOpacity={0.7} style={styles.logoTouch}>
+            {logoRow}
+          </TouchableOpacity>
+        ) : (
+          logoRow
+        )}
       </View>
 
       <View style={styles.mainNav}>
@@ -317,7 +345,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                     <View style={styles.cardMeta}>
                       <View style={styles.metaItem}>
                         <Feather name="navigation" size={14} color="#3B82F6" />
-                        <Text style={styles.metaText}>{project.route || '—'}</Text>
+                        <Text style={styles.metaText}>{formatRouteDisplay(project)}</Text>
                       </View>
                       <Text style={styles.metaDot}>•</Text>
                       <View style={styles.metaItem}>
@@ -473,6 +501,9 @@ const styles = StyleSheet.create({
   logoSection: {
     padding: 16,
     width: '100%'
+  },
+  logoTouch: {
+    alignSelf: 'stretch'
   },
   logoRow: {
     flexDirection: 'row',

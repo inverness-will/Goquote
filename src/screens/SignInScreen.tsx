@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   useWindowDimensions
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { getApiVersion } from '../services/authApi';
 
 export interface SignInScreenProps {
   onSignUp?: () => void;
@@ -28,9 +29,16 @@ export const SignInScreen: React.FC<SignInScreenProps> = ({
   const [password, setPassword] = React.useState('');
   const [emailFocused, setEmailFocused] = React.useState(false);
   const [passwordVisible, setPasswordVisible] = React.useState(false);
+  const [apiVersion, setApiVersion] = useState<string>('');
   const RIGHT_PANEL_MIN_WIDTH = 1120;
   const showRightPanel = width >= RIGHT_PANEL_MIN_WIDTH;
   const webNoOutline = Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : undefined;
+
+  useEffect(() => {
+    getApiVersion()
+      .then((r) => setApiVersion(r.version || ''))
+      .catch(() => {});
+  }, []);
 
   const onContinue = () => {
     onSignIn?.(email, password);
@@ -50,6 +58,11 @@ export const SignInScreen: React.FC<SignInScreenProps> = ({
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.page}>
+          {apiVersion ? (
+            <View style={styles.versionWrap}>
+              <Text style={styles.versionText}>API v{apiVersion}</Text>
+            </View>
+          ) : null}
           {/* Left content column */}
           <View style={styles.leftColumn}>
             {/* Header: logo + title (GoQuote black, Estimator orange per Figma) */}
@@ -227,6 +240,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
     minHeight: '100%'
+  },
+  versionWrap: {
+    position: 'absolute',
+    bottom: 12,
+    left: 24,
+    zIndex: 1
+  },
+  versionText: {
+    fontFamily: Platform.OS === 'web' ? 'Inter, system-ui, sans-serif' : undefined,
+    fontSize: 10,
+    color: '#9CA3AF'
   },
   leftColumn: {
     flex: 1,

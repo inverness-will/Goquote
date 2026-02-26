@@ -203,14 +203,18 @@ export function CreateProjectWizard({
   const nextId = useId();
 
   React.useEffect(() => {
-    if (visible && initialProject) {
+    if (!visible) return;
+    if (initialProject) {
       setForm(projectToFormState(initialProject));
       setStep(0);
-    } else if (!visible) {
+    } else {
       setForm(defaultFormState);
       setStep(0);
     }
   }, [visible, initialProject]);
+
+  const { width: windowWidth } = useWindowDimensions();
+  const narrowWizard = windowWidth < 600;
 
   const isWeb = Platform.OS === 'web';
   const startDateValue = form.startDate.trim() ? new Date(form.startDate.trim() + 'T12:00:00.000Z') : new Date();
@@ -274,8 +278,8 @@ export function CreateProjectWizard({
     }
     try {
       await onSubmit(buildPayload());
-      reset();
-      onClose();
+      // Parent closes the modal and returns to dashboard; do not call reset/onClose here
+      // to avoid state updates after unmount.
     } catch (_e) {
       // caller shows error
     }
@@ -323,8 +327,6 @@ export function CreateProjectWizard({
 
   if (!visible) return null;
 
-  const { width: windowWidth } = useWindowDimensions();
-  const narrowWizard = windowWidth < 600;
   const completedCount = step;
   const progressPct = (step / 5) * 100;
 

@@ -76,3 +76,9 @@ export async function resetPassword(payload: {
     body: JSON.stringify(payload)
   });
 }
+
+export async function getApiVersion(): Promise<{ version: string }> {
+  const res = await fetch(`${API_BASE_URL}/api/version`);
+  const data = await res.json().catch(() => ({ version: '' }));
+  return { version: data?.version ?? '' };
+}

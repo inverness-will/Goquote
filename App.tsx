@@ -13,6 +13,7 @@ import { ForgotPasswordScreen } from './src/screens/ForgotPasswordScreen';
 import { VerifyOtpScreen } from './src/screens/VerifyOtpScreen';
 import { ResetPasswordScreen } from './src/screens/ResetPasswordScreen';
 import { DashboardScreen } from './src/screens/DashboardScreen';
+import { DebugScreen } from './src/screens/DebugScreen';
 import {
   forgotPassword,
   resetPassword,
@@ -33,6 +34,7 @@ export default function App() {
   const [otpFlow, setOtpFlow] = useState<OtpFlow>('password-reset');
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [showDebug, setShowDebug] = useState(false);
 
   const showPopup = (title: string, message: string) => {
     if (typeof globalThis.alert === 'function') {
@@ -59,6 +61,14 @@ export default function App() {
   };
 
   if (user && token) {
+    if (showDebug) {
+      return (
+        <SafeAreaView style={styles.container}>
+          <StatusBar barStyle="dark-content" />
+          <DebugScreen token={token} onBack={() => setShowDebug(false)} />
+        </SafeAreaView>
+      );
+    }
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="dark-content" />
@@ -66,6 +76,7 @@ export default function App() {
           token={token}
           user={{ email: user.email, fullName: user.fullName }}
           onSignOut={handleSignOut}
+          onOpenDebug={() => setShowDebug(true)}
         />
       </SafeAreaView>
     );

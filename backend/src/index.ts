@@ -1,3 +1,4 @@
+import path from 'path';
 import cors from 'cors';
 import express, { Request, Response } from 'express';
 import { corsOrigins, env } from './config/env';
@@ -6,6 +7,7 @@ import { notFound } from './middleware/notFound';
 import { authRouter } from './routes/auth';
 import { healthRouter } from './routes/health';
 import { projectsRouter } from './routes/projects';
+import { debugRouter } from './routes/debug';
 
 const app = express();
 
@@ -27,6 +29,16 @@ app.get('/', (_req: Request, res: Response) => {
 app.use('/health', healthRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/projects', projectsRouter);
+app.use('/api/debug', debugRouter);
+
+app.get('/api/version', (_req: Request, res: Response) => {
+  try {
+    const pkg = require(path.join(__dirname, '..', 'package.json'));
+    res.json({ version: pkg.version || '0.0.0' });
+  } catch {
+    res.json({ version: '0.0.0' });
+  }
+});
 
 app.use(notFound);
 app.use(errorHandler);
