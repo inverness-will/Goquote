@@ -56,7 +56,11 @@ function formatRouteDisplay(project: Project): string {
     if (dest) return dest;
     return '—';
   }
-  const addr = project.jobSiteAddress?.trim();
+  return cityStateFromJobSite(project.jobSiteAddress);
+}
+
+function cityStateFromJobSite(jobSiteAddress: string | null): string {
+  const addr = jobSiteAddress?.trim();
   if (!addr) return '—';
   const parts = addr.split(',').map((p) => p.trim()).filter(Boolean);
   if (parts.length >= 2) return `${parts[parts.length - 2]}, ${parts[parts.length - 1]}`;
@@ -74,6 +78,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [menuProject, setMenuProject] = useState<Project | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const menuButtonRefs = React.useRef<Record<string, View | null>>({});
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -107,8 +113,22 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     setEditingProject(null);
   };
 
-  const openEditMenu = (project: Project) => setMenuProject(project);
-  const closeEditMenu = () => setMenuProject(null);
+  const openEditMenu = (project: Project) => {
+    const node = menuButtonRefs.current[project.id];
+    if (node && typeof (node as any).measureInWindow === 'function') {
+      (node as any).measureInWindow((x: number, y: number, w: number, h: number) => {
+        setMenuPosition({ x, y, width: w, height: h });
+        setMenuProject(project);
+      });
+    } else {
+      setMenuPosition(null);
+      setMenuProject(project);
+    }
+  };
+  const closeEditMenu = () => {
+    setMenuProject(null);
+    setMenuPosition(null);
+  };
   const openEditProject = (project: Project) => {
     setEditingProject(project);
     setMenuProject(null);
@@ -118,27 +138,36 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const handleDeleteProject = () => {
     if (!menuProject) return;
     const { id, name } = menuProject;
-    Alert.alert(
-      'Delete project',
-      `Delete "${name}"? This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel', onPress: closeEditMenu },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            closeEditMenu();
-            try {
-              await deleteProject(token, id);
-              await fetchProjects();
-            } catch (e) {
-              const message = e instanceof Error ? e.message : 'Failed to delete project';
-              Alert.alert('Error', message);
-            }
-          }
+    const doDelete = async () => {
+      closeEditMenu();
+      try {
+        await deleteProject(token, id);
+        await fetchProjects();
+      } catch (e) {
+        const message = e instanceof Error ? e.message : 'Failed to delete project';
+        if (Platform.OS === 'web') {
+          window.alert(message);
+        } else {
+          Alert.alert('Error', message);
         }
-      ]
-    );
+      }
+    };
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Delete "${name}"? This cannot be undone.`)) {
+        doDelete();
+      } else {
+        closeEditMenu();
+      }
+    } else {
+      Alert.alert(
+        'Delete project',
+        `Delete "${name}"? This cannot be undone.`,
+        [
+          { text: 'Cancel', style: 'cancel', onPress: closeEditMenu },
+          { text: 'Delete', style: 'destructive', onPress: doDelete }
+        ]
+      );
+    }
   };
 
   const handleWizardSubmit = async (payload: CreateProjectPayload) => {
@@ -353,6 +382,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                         </View>
                       </View>
                       <TouchableOpacity
+                        ref={(r) => { menuButtonRefs.current[project.id] = r; }}
                         style={styles.cardMenuBtn}
                         onPress={() => openEditMenu(project)}
                         hitSlop={8}
@@ -370,7 +400,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                       <Text style={styles.metaDot}>•</Text>
                       <View style={styles.metaItem}>
                         <Feather name="map-pin" size={14} color="#484566" />
-                        <Text style={styles.metaText}>{project.location || '—'}</Text>
+                        <Text style={styles.metaText}>{cityStateFromJobSite(project.jobSiteAddress)}</Text>
                       </View>
                     </View>
                     <View style={styles.cardMeta}>
@@ -424,37 +454,48 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         />
       </Modal>
 
-      {/* Three-dots menu: Edit */}
+      {/* Three-dots menu: Edit / Delete — opens below the button */}
       <Modal
         visible={menuProject !== null}
         transparent
         animationType="fade"
         onRequestClose={closeEditMenu}
       >
-        <TouchableOpacity
-          style={styles.menuOverlay}
-          activeOpacity={1}
-          onPress={closeEditMenu}
-        >
-          <View style={styles.menuCard}>
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => menuProject && openEditProject(menuProject)}
-              activeOpacity={0.7}
+        <View style={styles.menuModalContainer}>
+          <TouchableOpacity
+            style={styles.menuOverlay}
+            activeOpacity={1}
+            onPress={closeEditMenu}
+          />
+          {menuProject !== null && (
+            <View
+              style={[
+                styles.menuCard,
+                menuPosition
+                  ? { position: 'absolute', left: menuPosition.x, top: menuPosition.y + menuPosition.height + 4 }
+                  : styles.menuCardCentered
+              ]}
+              pointerEvents="box-none"
             >
-              <Feather name="edit-2" size={18} color="#1D2131" />
-              <Text style={styles.menuItemText}>Edit project</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={handleDeleteProject}
-              activeOpacity={0.7}
-            >
-              <Feather name="trash-2" size={18} color="#DC2626" />
-              <Text style={[styles.menuItemText, styles.menuItemTextDanger]}>Delete project</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => menuProject && openEditProject(menuProject)}
+                activeOpacity={0.7}
+              >
+                <Feather name="edit-2" size={18} color="#1D2131" />
+                <Text style={styles.menuItemText}>Edit project</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={handleDeleteProject}
+                activeOpacity={0.7}
+              >
+                <Feather name="trash-2" size={18} color="#DC2626" />
+                <Text style={[styles.menuItemText, styles.menuItemTextDanger]}>Delete project</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
       </Modal>
 
       {/* Collapsed sidebar overlay */}
@@ -1087,12 +1128,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#FFFFFF'
   },
+  menuModalContainer: {
+    flex: 1
+  },
   menuOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.35)'
   },
   menuCard: {
     backgroundColor: '#FFFFFF',
@@ -1101,9 +1142,16 @@ const styles = StyleSheet.create({
     minWidth: 200,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
     shadowRadius: 8,
+    shadowOpacity: 0.15,
     elevation: 4
+  },
+  menuCardCentered: {
+    position: 'absolute',
+    left: 24,
+    right: 24,
+    top: '35%',
+    alignSelf: 'center'
   },
   menuItem: {
     flexDirection: 'row',
