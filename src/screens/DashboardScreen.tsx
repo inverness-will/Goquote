@@ -47,6 +47,14 @@ function formatBudget(cents: number | null): string {
   return '$' + (cents / 100).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
+function extractCityState(jobSiteAddress: string | null): string {
+  const addr = jobSiteAddress?.trim();
+  if (!addr) return '—';
+  const parts = addr.split(',').map((p) => p.trim()).filter(Boolean);
+  if (parts.length >= 2) return `${parts[parts.length - 2]}, ${parts[parts.length - 1]}`;
+  return parts[0] || '—';
+}
+
 function formatRouteDisplay(project: Project): string {
   if (project.transport === 'FLY') {
     const origin = project.originAirport?.trim() || '';
@@ -56,11 +64,7 @@ function formatRouteDisplay(project: Project): string {
     if (dest) return dest;
     return '—';
   }
-  const addr = project.jobSiteAddress?.trim();
-  if (!addr) return '—';
-  const parts = addr.split(',').map((p) => p.trim()).filter(Boolean);
-  if (parts.length >= 2) return `${parts[parts.length - 2]}, ${parts[parts.length - 1]}`;
-  return parts[0] || '—';
+  return extractCityState(project.jobSiteAddress);
 }
 
 export const DashboardScreen: React.FC<DashboardScreenProps> = ({
@@ -370,7 +374,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                       <Text style={styles.metaDot}>•</Text>
                       <View style={styles.metaItem}>
                         <Feather name="map-pin" size={14} color="#484566" />
-                        <Text style={styles.metaText}>{project.location || '—'}</Text>
+                        <Text style={styles.metaText}>{extractCityState(project.jobSiteAddress)}</Text>
                       </View>
                     </View>
                     <View style={styles.cardMeta}>
