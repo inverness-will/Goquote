@@ -14,18 +14,17 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { getProjects, createProject, updateProject, deleteProject, type Project, type ProjectStatus, type CreateProjectPayload } from '../services/projectsApi';
 import { CreateProjectWizard, type PreviousRole } from '../components/CreateProjectWizard';
+import { AppSidebar, SIDEBAR_WIDTH, SIDEBAR_COLLAPSE_BREAKPOINT, CARD_WIDTH, CARD_GAP } from '../components/AppSidebar';
 
 export interface DashboardScreenProps {
   token: string;
   user?: { email: string; fullName: string };
   onSignOut?: () => void;
   onOpenDebug?: () => void;
+  onViewEstimate?: (project: Project) => void;
+  onOpenRoles?: () => void;
 }
 
-const SIDEBAR_WIDTH = 256;
-const CARD_WIDTH = 385;
-const CARD_GAP = 20;
-const SIDEBAR_COLLAPSE_BREAKPOINT = SIDEBAR_WIDTH + CARD_WIDTH + CARD_GAP;
 const NARROW_LAYOUT_BREAKPOINT = 600;
 
 const STATUS_COLORS: Record<ProjectStatus, string> = {
@@ -67,11 +66,15 @@ function cityStateFromJobSite(jobSiteAddress: string | null): string {
   return parts[0] || '—';
 }
 
+const DOUBLE_TAP_DELAY_MS = 300;
+
 export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   token,
   user,
   onSignOut,
-  onOpenDebug
+  onOpenDebug,
+  onViewEstimate,
+  onOpenRoles
 }) => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,6 +83,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const [menuProject, setMenuProject] = useState<Project | null>(null);
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const menuButtonRefs = React.useRef<Record<string, View | null>>({});
+  const lastTapRef = React.useRef<{ projectId: string; at: number } | null>(null);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -133,6 +137,23 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     setEditingProject(project);
     setMenuProject(null);
     setCreateModalVisible(true);
+  };
+
+  const handleCardPress = (project: Project) => {
+    if (!onViewEstimate) return;
+    const now = Date.now();
+    const prev = lastTapRef.current;
+    if (prev && prev.projectId === project.id && now - prev.at < DOUBLE_TAP_DELAY_MS) {
+      onViewEstimate(project);
+      lastTapRef.current = null;
+    } else {
+      lastTapRef.current = { projectId: project.id, at: now };
+    }
+  };
+
+  const openViewEstimate = (project: Project) => {
+    closeEditMenu();
+    onViewEstimate?.(project);
   };
 
   const handleDeleteProject = () => {
@@ -218,91 +239,18 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const initials = user?.fullName
     ? user.fullName.split(/\s+/).map((n) => n[0]).join('').slice(0, 2).toUpperCase()
     : 'JD';
-  const displayName = user?.fullName?.split(/\s+/)[0] + ' ' + (user?.fullName?.split(/\s+/)[1]?.[0] ?? '') || 'Jason D';
-  const displayEmail = user?.email ?? 'jason.duong@gmail.com';
-
-  const logoRow = (
-    <View style={styles.logoRow}>
-      <View style={styles.logoSquare} />
-      <Text style={styles.brandGoQuote}>GoQuote</Text>
-      <Text style={styles.brandEstimator}> Estimator</Text>
-    </View>
-  );
+  const displayName = user?.fullName?.split(/\s+/)[0] + ' ' + (user?.fullName?.split(/\s+/)[1]?.[0] ?? '') || 'User';
+  const displayEmail = user?.email ?? '';
 
   const sidebarContent = (
-    <>
-      <View style={styles.logoSection}>
-        {onOpenDebug ? (
-          <TouchableOpacity onPress={onOpenDebug} activeOpacity={0.7} style={styles.logoTouch}>
-            {logoRow}
-          </TouchableOpacity>
-        ) : (
-          logoRow
-        )}
-      </View>
-
-      <View style={styles.mainNav}>
-        <TouchableOpacity style={[styles.navItem, styles.navItemActive]}>
-          <Feather name="layout" size={18} color="#1D2131" />
-          <Text style={[styles.navLabel, styles.navLabelActive]}>Dashboard</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Feather name="credit-card" size={18} color="#6B7280" />
-          <Text style={styles.navLabel}>Subscription</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItemRow}>
-          <View style={styles.navItemLeft}>
-            <Feather name="user" size={18} color="#6B7280" />
-            <Text style={styles.navLabel}>Account & Billing</Text>
-          </View>
-          <Feather name="chevron-down" size={18} color="#6B7280" />
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.divider} />
-
-      <View style={styles.activeSection}>
-        <Text style={styles.sectionLabel}>ACTIVE PROJECTS</Text>
-        {sidebarProjects.map((p, i) => (
-          <TouchableOpacity key={i} style={styles.projectRow}>
-            <View style={[styles.projectDot, { backgroundColor: p.dotColor }]} />
-            <Text style={styles.projectRowName} numberOfLines={1}>{p.name}</Text>
-            <Feather name="more-horizontal" size={16} color="#1D2131" />
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <View style={styles.divider} />
-
-      <View style={styles.mainNav}>
-        <TouchableOpacity style={styles.navItem}>
-          <Feather name="settings" size={18} color="#6B7280" />
-          <Text style={styles.navLabel}>Settings & Defaults</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Feather name="help-circle" size={18} color="#6B7280" />
-          <Text style={styles.navLabel}>Support & Help</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.divider} />
-
-      <View style={styles.userSection}>
-        <View style={styles.userRow}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initials}</Text>
-            <View style={styles.statusOnline} />
-          </View>
-          <View style={styles.userInfo}>
-            <Text style={styles.userName}>{displayName}</Text>
-            <Text style={styles.userEmail} numberOfLines={1}>{displayEmail}</Text>
-          </View>
-          <TouchableOpacity onPress={onSignOut} hitSlop={8}>
-            <Feather name="log-out" size={18} color="#6B7280" />
-          </TouchableOpacity>
-        </View>
-      </View>
-    </>
+    <AppSidebar
+      activePage="dashboard"
+      user={{ displayName, displayEmail, initials }}
+      onRolesPress={onOpenRoles}
+      onSignOut={onSignOut}
+      onLogoPress={onOpenDebug}
+      recentProjects={sidebarProjects}
+    />
   );
 
   return (
@@ -372,7 +320,12 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 const workdaysStr = project.workdays != null ? `${project.workdays} workdays` : '—';
                 const budgetStr = formatBudget(project.budgetCents);
                 return (
-                  <View key={project.id} style={[styles.card, narrowLayout && styles.cardNarrow]}>
+                  <TouchableOpacity
+                    key={project.id}
+                    style={[styles.card, narrowLayout && styles.cardNarrow]}
+                    onPress={() => handleCardPress(project)}
+                    activeOpacity={1}
+                  >
                     <View style={styles.cardTop}>
                       <View style={styles.cardTitleRow}>
                         <Feather name="folder" size={24} color="#1D2131" />
@@ -424,7 +377,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                         <Text style={[styles.footerBudget, { color: '#1BC685' }]}>{budgetStr}</Text>
                       </View>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 );
               })}
               <TouchableOpacity style={[styles.cardCreate, narrowLayout && styles.cardCreateNarrow]} onPress={openCreateModal}>
@@ -445,6 +398,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         onRequestClose={closeCreateModal}
       >
         <CreateProjectWizard
+          token={token}
           visible={createModalVisible}
           onClose={closeCreateModal}
           onSubmit={handleWizardSubmit}
@@ -477,6 +431,16 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               ]}
               pointerEvents="box-none"
             >
+              {onViewEstimate && (
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => menuProject && openViewEstimate(menuProject)}
+                  activeOpacity={0.7}
+                >
+                  <Feather name="file-text" size={18} color="#1D2131" />
+                  <Text style={styles.menuItemText}>View estimate</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => menuProject && openEditProject(menuProject)}
@@ -559,176 +523,6 @@ const styles = StyleSheet.create({
   sidebarBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.3)'
-  },
-  logoSection: {
-    padding: 16,
-    width: '100%'
-  },
-  logoTouch: {
-    alignSelf: 'stretch'
-  },
-  logoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8
-  },
-  logoSquare: {
-    width: 12,
-    height: 12,
-    backgroundColor: '#1D2131',
-    borderRadius: 4
-  },
-  brandGoQuote: {
-    fontFamily: Platform.OS === 'web' ? 'Inter, system-ui, sans-serif' : undefined,
-    fontWeight: '700',
-    fontSize: 20,
-    lineHeight: 28,
-    letterSpacing: -0.5,
-    color: '#1D2131'
-  },
-  brandEstimator: {
-    fontFamily: Platform.OS === 'web' ? 'Inter, system-ui, sans-serif' : undefined,
-    fontWeight: '700',
-    fontSize: 20,
-    lineHeight: 28,
-    letterSpacing: -0.5,
-    color: '#F67A34'
-  },
-  mainNav: {
-    width: 224,
-    gap: 8
-  },
-  navItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    gap: 12,
-    borderRadius: 8
-  },
-  navItemActive: {
-    backgroundColor: '#EBEBEB',
-    borderRadius: 12
-  },
-  navItemRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8
-  },
-  navItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12
-  },
-  navLabel: {
-    fontFamily: Platform.OS === 'web' ? 'Inter, system-ui, sans-serif' : undefined,
-    fontWeight: '500',
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#6B7280'
-  },
-  navLabelActive: {
-    color: '#1D2131'
-  },
-  divider: {
-    width: 226,
-    height: 1,
-    backgroundColor: '#E5E7EB',
-    marginVertical: 24
-  },
-  sectionLabel: {
-    fontFamily: Platform.OS === 'web' ? 'Inter, system-ui, sans-serif' : undefined,
-    fontWeight: '500',
-    fontSize: 12,
-    lineHeight: 16,
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-    color: '#6B7280',
-    marginBottom: 8,
-    paddingHorizontal: 12
-  },
-  activeSection: {
-    width: 224
-  },
-  projectRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    gap: 12,
-    borderRadius: 8
-  },
-  projectDot: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: '#1D2131'
-  },
-  projectRowName: {
-    flex: 1,
-    fontFamily: Platform.OS === 'web' ? 'Inter, system-ui, sans-serif' : undefined,
-    fontWeight: '400',
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#1D2131'
-  },
-  userSection: {
-    padding: 16,
-    width: '100%',
-    marginTop: 'auto'
-  },
-  userRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12
-  },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#3B82F6',
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  avatarText: {
-    fontFamily: Platform.OS === 'web' ? 'Inter, system-ui, sans-serif' : undefined,
-    fontWeight: '800',
-    fontSize: 11.25,
-    lineHeight: 18,
-    color: '#FFFFFF'
-  },
-  statusOnline: {
-    position: 'absolute',
-    right: 0,
-    bottom: 0,
-    width: 11.25,
-    height: 11.25,
-    borderRadius: 12,
-    backgroundColor: '#22C55E',
-    borderWidth: 2.25,
-    borderColor: '#FFFFFF'
-  },
-  userInfo: {
-    flex: 1,
-    minWidth: 0
-  },
-  userName: {
-    fontFamily: Platform.OS === 'web' ? 'Inter, system-ui, sans-serif' : undefined,
-    fontWeight: '500',
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#1D2131'
-  },
-  userEmail: {
-    fontFamily: Platform.OS === 'web' ? 'Inter, system-ui, sans-serif' : undefined,
-    fontWeight: '400',
-    fontSize: 12,
-    lineHeight: 16,
-    color: '#6B7280'
   },
   main: {
     flex: 1,

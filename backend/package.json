@@ -11,6 +11,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
+    "prisma:reset": "prisma migrate reset",
     "render-build": "npm install --include=dev && npm run prisma:generate && npm run build && npm run prisma:deploy"
   },
   "keywords": [],
@@ -18,7 +19,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@prisma/client": "^6.16.2",
+    "@prisma/client": "^6.19.2",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
@@ -28,12 +29,12 @@
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
-    "prisma": "^6.16.2",
     "resend": "^6.9.2",
     "typescript": "^5.9.3",
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "prisma": "^6.19.2",
     "tsx": "^4.21.0"
   }
 }

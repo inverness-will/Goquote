@@ -10,7 +10,7 @@ import {
   Platform
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { getDebugTables, getDebugTableRows } from '../services/debugApi';
+import { getDebugTables, getDebugTableRows, deleteDebugRow } from '../services/debugApi';
 
 export interface DebugScreenProps {
   token: string;
@@ -61,6 +61,36 @@ export const DebugScreen: React.FC<DebugScreenProps> = ({ token, onBack }) => {
     setRows([]);
   };
 
+  const handleDelete = (row: Record<string, unknown>) => {
+    const rawId = row.id;
+    const id = rawId != null ? String(rawId).trim() : '';
+    if (!id) {
+      Alert.alert('Error', 'Row has no id');
+      return;
+    }
+    Alert.alert(
+      'Delete row',
+      `Delete this ${selectedTable} row? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteDebugRow(token, selectedTable!, id);
+              setRows((prev) => prev.filter((r) => String((r as Record<string, unknown>).id).trim() !== id));
+              const data = await getDebugTableRows(token, selectedTable!);
+              setRows(data.rows || []);
+            } catch (e) {
+              Alert.alert('Error', e instanceof Error ? e.message : 'Failed to delete');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   if (selectedTable !== null) {
     return (
       <View style={styles.page}>
@@ -82,6 +112,15 @@ export const DebugScreen: React.FC<DebugScreenProps> = ({ token, onBack }) => {
                 <Text style={styles.rowJson} selectable>
                   {JSON.stringify(row, null, 2)}
                 </Text>
+                {typeof (row as Record<string, unknown>).id === 'string' && (
+                  <TouchableOpacity
+                    style={styles.deleteRowBtn}
+                    onPress={() => handleDelete(row as Record<string, unknown>)}
+                  >
+                    <Feather name="trash-2" size={18} color="#DC2626" />
+                    <Text style={styles.deleteRowBtnText}>Delete</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             ))
           )}
@@ -236,6 +275,22 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === 'web' ? 'monospace, ui-monospace' : undefined,
     fontSize: 12,
     color: '#374151'
+  },
+  deleteRowBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    alignSelf: 'flex-start',
+    backgroundColor: '#FEE2E2',
+    borderRadius: 8
+  },
+  deleteRowBtnText: {
+    fontFamily: Platform.OS === 'web' ? 'Inter, system-ui, sans-serif' : undefined,
+    fontSize: 14,
+    color: '#DC2626',
+    marginLeft: 6
   },
   emptyText: {
     fontFamily: Platform.OS === 'web' ? 'Inter, system-ui, sans-serif' : undefined,

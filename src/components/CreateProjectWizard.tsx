@@ -14,7 +14,9 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Feather } from '@expo/vector-icons';
-import type { CreateProjectPayload, Currency, Transport, Project } from '../services/projectsApi';
+import type { CreateProjectPayload, Currency, Transport, Project, ProjectRoleRef } from '../services/projectsApi';
+import { buildCostBreakdown } from '../utils/costBreakdown';
+import { getRoleTypes, createRoleType, type RoleType } from '../services/roleTypesApi';
 
 /** Web-only: renders a native <input type="date"> so the browser date picker works. RNW TextInput overwrites type. */
 function WebDateInput({
@@ -70,6 +72,43 @@ function toISODateString(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** Today's date as YYYY-MM-DD in local date (start of day). */
+function getTodayDateString(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function parseDateOnly(dateStr: string): Date | null {
+  const s = dateStr.trim();
+  if (!s) return null;
+  const d = new Date(s + 'T12:00:00.000Z');
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/** Count working days in [start, end] inclusive (UTC date). Weekdays (Mon–Fri) always count; Sat/Sun count if flags set. */
+function getWorkingDaysInRange(
+  startStr: string,
+  endStr: string,
+  workSaturday: boolean,
+  workSunday: boolean
+): number {
+  const start = new Date(startStr.trim() + 'T12:00:00.000Z');
+  const end = new Date(endStr.trim() + 'T12:00:00.000Z');
+  if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) return 0;
+  let count = 0;
+  const cur = new Date(start.getTime());
+  const endTime = end.getTime();
+  while (cur.getTime() <= endTime) {
+    const d = cur.getUTCDay(); // 0 Sun .. 6 Sat
+    const isWeekday = d >= 1 && d <= 5;
+    const isSat = d === 6;
+    const isSun = d === 0;
+    if (isWeekday || (workSaturday && isSat) || (workSunday && isSun)) count += 1;
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+  return count;
+}
+
 const WIZARD_STEPS = [
   { title: 'Project Information', subtitle: 'Enter the basic information for your estimate' },
   { title: 'Manpower & Scheduling', subtitle: 'Configure crew and work schedule' },
@@ -102,6 +141,12 @@ export type WizardFormRole = {
   hotelRoomSharing: boolean;
 };
 
+export type WizardFormRoleEntry = {
+  id: string;
+  roleTypeId: string;
+  count: number;
+};
+
 export type WizardFormState = {
   name: string;
   startDate: string;
@@ -113,6 +158,7 @@ export type WizardFormState = {
   workSaturday: boolean;
   workSunday: boolean;
   staff: WizardFormRole[];
+  roleEntries: WizardFormRoleEntry[];
   transport: Transport | null;
   jobSiteAddress: string;
   originAddress: string;
@@ -137,6 +183,7 @@ const defaultFormState: WizardFormState = {
   workSaturday: false,
   workSunday: false,
   staff: [],
+  roleEntries: [],
   transport: null,
   jobSiteAddress: '',
   originAddress: '',
@@ -151,13 +198,14 @@ const defaultFormState: WizardFormState = {
 };
 
 export interface CreateProjectWizardProps {
+  token: string;
   visible: boolean;
   onClose: () => void;
   onSubmit: (payload: CreateProjectPayload) => Promise<void>;
   submitting: boolean;
   /** When set, wizard is in edit mode: form is prefilled and submit button says "Save changes". */
   initialProject?: Project | null;
-  /** Roles from other projects the user can pick to fill title + rates. */
+  /** Roles from other projects the user can pick to fill title + rates. (Legacy; role types are used when available.) */
   previousRoles?: PreviousRole[];
 }
 
@@ -166,7 +214,7 @@ function useId() {
   return () => String(++ref.current);
 }
 
-function projectToFormState(p: Project): WizardFormState {
+function projectToFormState(p: Project, nextId: () => string): WizardFormState {
   const staff: WizardFormRole[] = (p.staff || []).map((s) => ({
     id: s.id,
     title: s.title,
@@ -176,17 +224,33 @@ function projectToFormState(p: Project): WizardFormState {
     hotelRoomSharing: s.hotelRoomSharing
   }));
   const singleRoomRoleIds = (p.staff || []).filter((s) => !s.hotelRoomSharing).map((s) => s.id);
+  const roleEntries: WizardFormRoleEntry[] = (p.roles || []).map((r) => ({
+    id: nextId(),
+    roleTypeId: r.roleTypeId,
+    count: r.count
+  }));
+  const startDate = p.startDate ? p.startDate.slice(0, 10) : '';
+  const endDate = p.endDate ? p.endDate.slice(0, 10) : '';
+  const workSaturday = p.workSaturday ?? false;
+  const workSunday = p.workSunday ?? false;
+  const crewFromRoles = roleEntries.reduce((s, e) => s + e.count, 0);
+  const crew = crewFromRoles > 0 ? crewFromRoles : (p.crew ?? 0);
+  const workingDaysInRange =
+    startDate && endDate ? getWorkingDaysInRange(startDate, endDate, workSaturday, workSunday) : 0;
+  const workdays =
+    workingDaysInRange > 0 && crew > 0 ? String(crew * workingDaysInRange) : '';
   return {
     name: p.name,
-    startDate: p.startDate ? p.startDate.slice(0, 10) : '',
-    endDate: p.endDate ? p.endDate.slice(0, 10) : '',
+    startDate,
+    endDate,
     currency: (p.currency ?? 'USD') as Currency,
     costPerWeek: '',
-    crew: p.crew != null ? String(p.crew) : '',
-    workdays: p.workdays != null ? String(p.workdays) : '',
-    workSaturday: p.workSaturday ?? false,
-    workSunday: p.workSunday ?? false,
+    crew: crew > 0 ? String(crew) : '',
+    workdays,
+    workSaturday,
+    workSunday,
     staff,
+    roleEntries,
     transport: p.transport ?? null,
     jobSiteAddress: p.jobSiteAddress ?? '',
     originAddress: p.originAddress ?? '',
@@ -202,6 +266,7 @@ function projectToFormState(p: Project): WizardFormState {
 }
 
 export function CreateProjectWizard({
+  token,
   visible,
   onClose,
   onSubmit,
@@ -212,13 +277,29 @@ export function CreateProjectWizard({
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<WizardFormState>(defaultFormState);
   const [datePickerOpen, setDatePickerOpen] = useState<'start' | 'end' | null>(null);
-  const [rolePickerOpen, setRolePickerOpen] = useState(false);
+  const [rolePickerOpen, setRolePickerOpen] = useState<string | false>(false);
+  const [roleTypes, setRoleTypes] = useState<RoleType[]>([]);
+  const [createRoleModalOpen, setCreateRoleModalOpen] = useState(false);
+  const [createRoleForm, setCreateRoleForm] = useState({
+    name: '',
+    hourlyRateDollars: '',
+    perDiemDollars: '',
+    hotelSoloRoom: false
+  });
+  const [createRoleSaving, setCreateRoleSaving] = useState(false);
   const nextId = useId();
+
+  React.useEffect(() => {
+    if (!visible || !token) return;
+    getRoleTypes(token)
+      .then(setRoleTypes)
+      .catch(() => setRoleTypes([]));
+  }, [visible, token]);
 
   React.useEffect(() => {
     if (!visible) return;
     if (initialProject) {
-      setForm(projectToFormState(initialProject));
+      setForm(projectToFormState(initialProject, nextId));
       setStep(0);
     } else {
       setForm(defaultFormState);
@@ -246,7 +327,105 @@ export function CreateProjectWizard({
     setForm(defaultFormState);
   };
 
+  const totalStaffCount = form.roleEntries.reduce((s, r) => s + (r.count ?? 1), 0);
+  const crewNum = form.crew.trim() ? parseInt(form.crew, 10) : 0;
+  const workingDaysInRange =
+    form.startDate.trim() && form.endDate.trim()
+      ? getWorkingDaysInRange(form.startDate, form.endDate, form.workSaturday, form.workSunday)
+      : null;
+  /** Workdays = person-days (crew × working calendar days in range). */
+  const expectedWorkdays = workingDaysInRange != null && crewNum > 0 ? crewNum * workingDaysInRange : null;
+  const workdaysNumForValidation = form.workdays.trim() ? parseInt(form.workdays, 10) : null;
+
+  const validateStep1 = (): string | null => {
+    const invalidEntry = form.roleEntries.find((e) => !e.roleTypeId || e.count < 1);
+    if (invalidEntry) {
+      return 'Each row must have a role type selected and count at least 1.';
+    }
+    if (form.roleEntries.length === 0) {
+      return 'Add at least one role (with a role type and count).';
+    }
+    if (totalStaffCount !== crewNum) {
+      return `Total people in roles (${totalStaffCount}) must equal crew size (${crewNum}). Adjust the # for each role or the crew size.`;
+    }
+    if (expectedWorkdays != null && workdaysNumForValidation !== expectedWorkdays) {
+      return `With the dates selected and the crew size of ${crewNum}, the number of workdays is ${expectedWorkdays}.`;
+    }
+    return null;
+  };
+
+  // Keep workdays in sync with person-days (crew × working days in range)
+  useEffect(() => {
+    if (expectedWorkdays == null) return;
+    setForm((f) => {
+      const current = f.workdays.trim() ? parseInt(f.workdays, 10) : null;
+      if (current === expectedWorkdays) return f;
+      return { ...f, workdays: String(expectedWorkdays) };
+    });
+  }, [expectedWorkdays]);
+
+  // Enforce Fly or Drive on Travel step: default to Fly when entering step 2 with no/invalid transport
+  useEffect(() => {
+    if (step !== 2) return;
+    setForm((f) => {
+      if (f.transport === 'FLY' || f.transport === 'DRIVE') return f;
+      return { ...f, transport: 'FLY' as const };
+    });
+  }, [step]);
+
+  const validateStep2 = (): string | null => {
+    if (form.transport !== 'FLY' && form.transport !== 'DRIVE') {
+      return 'Please choose Fly or Drive for travel.';
+    }
+    return null;
+  };
+
+  const validateStep0 = (): string | null => {
+    const startStr = form.startDate.trim().slice(0, 10);
+    const endStr = form.endDate.trim().slice(0, 10);
+    if (!startStr || !endStr) {
+      return 'Please select both start and end date.';
+    }
+    const startDate = parseDateOnly(startStr);
+    const endDate = parseDateOnly(endStr);
+    if (!startDate || !endDate) {
+      return 'Please enter valid start and end dates.';
+    }
+    const today = getTodayDateString();
+    if (startStr < today) {
+      return 'Start date cannot be in the past.';
+    }
+    if (endStr < today) {
+      return 'End date cannot be in the past.';
+    }
+    if (startDate.getTime() > endDate.getTime()) {
+      return 'End date must be on or after start date.';
+    }
+    return null;
+  };
+
   const goNext = () => {
+    if (step === 0) {
+      const err = validateStep0();
+      if (err) {
+        Alert.alert('Project Information', err);
+        return;
+      }
+    }
+    if (step === 1) {
+      const err = validateStep1();
+      if (err) {
+        Alert.alert('Manpower & Scheduling', err);
+        return;
+      }
+    }
+    if (step === 2) {
+      const err = validateStep2();
+      if (err) {
+        Alert.alert('Travel & Transport', err);
+        return;
+      }
+    }
     if (step < 4) setStep(step + 1);
   };
 
@@ -255,19 +434,38 @@ export function CreateProjectWizard({
   };
 
   const buildPayload = (): CreateProjectPayload => {
+    const roleTypeMap = new Map(roleTypes.map((rt) => [rt.id, rt]));
     const staffPayload: Array<{ title: string; hourlyRateCents: number; perDiemCents: number; hotelRoomSharing: boolean }> = [];
-    form.staff
-      .filter((r) => r.title.trim())
-      .forEach((r) => {
-        const count = Math.max(1, Math.min(999, r.count || 1));
+    form.roleEntries
+      .filter((e) => e.roleTypeId && e.count >= 1)
+      .forEach((e) => {
+        const rt = roleTypeMap.get(e.roleTypeId);
+        if (!rt) return;
+        const count = Math.max(1, Math.min(999, e.count));
         const entry = {
-          title: r.title.trim(),
-          hourlyRateCents: Math.round(parseFloat(r.hourlyRateDollars || '0') * 100),
-          perDiemCents: Math.round(parseFloat(r.perDiemDollars || '0') * 100),
-          hotelRoomSharing: !form.singleRoomRoleIds.includes(r.id)
+          title: rt.name,
+          hourlyRateCents: rt.hourlyRateCents,
+          perDiemCents: rt.perDiemCents,
+          hotelRoomSharing: !rt.hotelSoloRoom
         };
         for (let i = 0; i < count; i++) staffPayload.push(entry);
       });
+    const rolesPayload: ProjectRoleRef[] = form.roleEntries
+      .filter((e) => e.roleTypeId && e.count >= 1)
+      .map((e) => ({ roleTypeId: e.roleTypeId, count: e.count }));
+    const workdaysPersonDays = form.workdays.trim() ? parseInt(form.workdays, 10) : 1;
+    const calendarWorkingDays =
+      form.startDate.trim() && form.endDate.trim()
+        ? getWorkingDaysInRange(form.startDate, form.endDate, form.workSaturday, form.workSunday)
+        : 1;
+    const hotelQualityNum = form.hotelQuality ? parseInt(form.hotelQuality, 10) : undefined;
+    const costBreakdown = buildCostBreakdown({
+      staff: staffPayload.length ? staffPayload : [],
+      workdays: calendarWorkingDays,
+      hotelQuality: hotelQualityNum,
+      contingencyBudgetPct: form.contingencyBudgetPct,
+      transport: form.transport ?? undefined
+    });
     return {
       name: form.name.trim(),
       status: 'DRAFT',
@@ -275,25 +473,36 @@ export function CreateProjectWizard({
       endDate: form.endDate.trim() ? form.endDate.trim() + 'T00:00:00.000Z' : undefined,
       currency: form.currency,
       crew: form.crew.trim() ? parseInt(form.crew, 10) : undefined,
-      workdays: form.workdays.trim() ? parseInt(form.workdays, 10) : undefined,
+      workdays: workdaysPersonDays,
       workSaturday: form.workSaturday,
       workSunday: form.workSunday,
       transport: form.transport ?? undefined,
       jobSiteAddress: form.jobSiteAddress.trim() || undefined,
-      ...((form.transport === 'DRIVE' || form.transport === 'TRAIN') && { originAddress: form.originAddress.trim() || undefined }),
+      ...(form.transport === 'DRIVE' && { originAddress: form.originAddress.trim() || undefined }),
       ...(form.transport === 'FLY' && {
         originAirport: form.originAirport.trim() || undefined,
         destinationAirport: form.destinationAirport.trim() || undefined
       }),
-      hotelQuality: form.hotelQuality ? parseInt(form.hotelQuality, 10) : undefined,
+      hotelQuality: hotelQualityNum,
       contingencyBudgetPct: form.contingencyBudgetPct,
-      staff: staffPayload.length ? staffPayload : undefined
+      roles: rolesPayload.length ? rolesPayload : undefined,
+      costBreakdown
     };
   };
 
   const handleSubmit = async () => {
     if (!form.name.trim()) {
       Alert.alert('Validation', 'Project name is required.');
+      return;
+    }
+    const step0Err = validateStep0();
+    if (step0Err) {
+      Alert.alert('Project Information', step0Err);
+      return;
+    }
+    const step1Err = validateStep1();
+    if (step1Err) {
+      Alert.alert('Manpower & Scheduling', step1Err);
       return;
     }
     try {
@@ -305,62 +514,71 @@ export function CreateProjectWizard({
     }
   };
 
-  const addRole = () => {
-    setForm((f) => ({
-      ...f,
-      staff: [
-        ...f.staff,
-        {
-          id: nextId(),
-          title: '',
-          count: 1,
-          hourlyRateDollars: '',
-          perDiemDollars: '',
-          hotelRoomSharing: true
-        }
-      ]
-    }));
+  const addRoleEntry = () => {
+    setForm((f) => {
+      const newEntries = [...f.roleEntries, { id: nextId(), roleTypeId: '', count: 1 }];
+      const total = newEntries.reduce((s, e) => s + (e.count ?? 1), 0);
+      return { ...f, roleEntries: newEntries, crew: String(total) };
+    });
   };
 
-  const addRoleFromPrevious = (prev: PreviousRole) => {
-    setForm((f) => ({
-      ...f,
-      staff: [
-        ...f.staff,
-        {
-          id: nextId(),
-          title: prev.title,
-          count: 1,
-          hourlyRateDollars: (prev.hourlyRateCents / 100).toFixed(2),
-          perDiemDollars: (prev.perDiemCents / 100).toFixed(2),
-          hotelRoomSharing: prev.hotelRoomSharing
-        }
-      ]
-    }));
+  const updateRoleEntry = (id: string, patch: Partial<WizardFormRoleEntry>) => {
+    setForm((f) => {
+      const newEntries = f.roleEntries.map((e) => (e.id === id ? { ...e, ...patch } : e));
+      const total = newEntries.reduce((s, e) => s + (e.count ?? 1), 0);
+      return { ...f, roleEntries: newEntries, crew: String(total) };
+    });
   };
 
-  const updateRole = (id: string, patch: Partial<WizardFormRole>) => {
-    setForm((f) => ({
-      ...f,
-      staff: f.staff.map((r) => (r.id === id ? { ...r, ...patch } : r))
-    }));
+  const removeRoleEntry = (id: string) => {
+    setForm((f) => {
+      const newEntries = f.roleEntries.filter((e) => e.id !== id);
+      const total = newEntries.reduce((s, e) => s + (e.count ?? 1), 0);
+      return { ...f, roleEntries: newEntries, crew: String(total) };
+    });
   };
 
-  const removeRole = (id: string) => {
-    setForm((f) => ({
-      ...f,
-      staff: f.staff.filter((r) => r.id !== id),
-      singleRoomRoleIds: f.singleRoomRoleIds.filter((x) => x !== id)
-    }));
+  const openCreateRole = () => {
+    setCreateRoleForm({ name: '', hourlyRateDollars: '', perDiemDollars: '', hotelSoloRoom: false });
+    setCreateRoleModalOpen(true);
   };
 
-  const toggleSingleRoom = (roleId: string) => {
-    setForm((f) => ({
-      ...f,
-      singleRoomRoleIds: f.singleRoomRoleIds.includes(roleId)
-        ? f.singleRoomRoleIds.filter((x) => x !== roleId)
-        : [...f.singleRoomRoleIds, roleId]
-    }));
+  const closeCreateRole = () => {
+    setCreateRoleModalOpen(false);
+  };
+
+  const handleCreateRoleSave = async () => {
+    const name = createRoleForm.name.trim();
+    if (!name) {
+      Alert.alert('Validation', 'Role name is required.');
+      return;
+    }
+    const hourlyRateCents = Math.round(parseFloat(createRoleForm.hourlyRateDollars || '0') * 100);
+    const perDiemCents = Math.round(parseFloat(createRoleForm.perDiemDollars || '0') * 100);
+    if (hourlyRateCents < 0 || perDiemCents < 0) {
+      Alert.alert('Validation', 'Rates must be 0 or greater.');
+      return;
+    }
+    setCreateRoleSaving(true);
+    try {
+      const newRole = await createRoleType(token, {
+        name,
+        hourlyRateCents,
+        perDiemCents,
+        hotelSoloRoom: createRoleForm.hotelSoloRoom
+      });
+      const list = await getRoleTypes(token);
+      setRoleTypes(list);
+      if (typeof rolePickerOpen === 'string') {
+        updateRoleEntry(rolePickerOpen, { roleTypeId: newRole.id });
+      }
+      closeCreateRole();
+      setRolePickerOpen(false);
+    } catch (e) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to create role');
+    } finally {
+      setCreateRoleSaving(false);
+    }
   };
 
   if (!visible) return null;
@@ -538,22 +756,35 @@ export function CreateProjectWizard({
               <View style={styles.formBlock}>
                 <Text style={styles.fieldLabel}>Crew size</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, styles.inputDisabled]}
                   value={form.crew}
-                  onChangeText={(v) => setForm((f) => ({ ...f, crew: v }))}
-                  placeholder="12"
+                  editable={false}
+                  placeholder="Add roles below"
                   placeholderTextColor="#94A3B8"
                   keyboardType="number-pad"
                 />
-                <Text style={styles.fieldLabel}>Workdays</Text>
+                <Text style={styles.helperText}>
+                  Total people in roles: {totalStaffCount}. {totalStaffCount !== crewNum && crewNum > 0 && (
+                    <Text style={styles.helperTextError}> Must equal crew size ({crewNum}).</Text>
+                  )}
+                </Text>
+                <Text style={styles.fieldLabel}>Workdays (person-days)</Text>
                 <TextInput
                   style={styles.input}
                   value={form.workdays}
                   onChangeText={(v) => setForm((f) => ({ ...f, workdays: v }))}
-                  placeholder="54"
+                  placeholder="70"
                   placeholderTextColor="#94A3B8"
                   keyboardType="number-pad"
                 />
+                {expectedWorkdays != null && (
+                  <Text style={styles.helperText}>
+                    Crew × working days in range = {crewNum} × {workingDaysInRange} = {expectedWorkdays} person-days.
+                    {workdaysNumForValidation != null && workdaysNumForValidation !== expectedWorkdays && (
+                      <Text style={styles.helperTextError}> With the dates selected and the crew size of {crewNum}, the number of workdays is {expectedWorkdays}.</Text>
+                    )}
+                  </Text>
+                )}
                 <View style={styles.toggleRow}>
                   <TouchableOpacity
                     style={[styles.tab, form.workSaturday && styles.tabActive]}
@@ -569,50 +800,39 @@ export function CreateProjectWizard({
                   </TouchableOpacity>
                 </View>
                 <Text style={styles.fieldLabel}>Staff roles</Text>
-                {form.staff.map((r) => (
-                  <View key={r.id} style={styles.roleRow}>
-                    <TextInput
-                      style={[styles.input, styles.roleTitle]}
-                      value={r.title}
-                      onChangeText={(v) => updateRole(r.id, { title: v })}
-                      placeholder="Role title"
-                      placeholderTextColor="#94A3B8"
-                    />
-                    <View style={styles.roleCountWrap}>
-                      <Text style={styles.roleCountLabel}>#</Text>
-                      <TextInput
-                        style={[styles.input, styles.roleCount]}
-                        value={String(r.count ?? 1)}
-                        onChangeText={(v) => {
-                          const n = parseInt(v, 10);
-                          updateRole(r.id, { count: v === '' ? 1 : isNaN(n) || n < 1 ? 1 : Math.min(999, n) });
-                        }}
-                        placeholder="1"
-                        placeholderTextColor="#94A3B8"
-                        keyboardType="number-pad"
-                      />
+                <Text style={styles.helperText}>Select a role type and how many. Define role types (name, rate, per diem, solo room) in the Roles screen.</Text>
+                {form.roleEntries.map((e) => {
+                  const rt = roleTypes.find((r) => r.id === e.roleTypeId);
+                  return (
+                    <View key={e.id} style={styles.roleRow}>
+                      <TouchableOpacity
+                        style={[styles.input, styles.roleTitle, { justifyContent: 'center' }]}
+                        onPress={() => setRolePickerOpen(e.id)}
+                      >
+                        <Text style={rt ? undefined : styles.placeholderText}>
+                          {rt ? rt.name : 'Select role type'}
+                        </Text>
+                      </TouchableOpacity>
+                      <View style={styles.roleCountWrap}>
+                        <Text style={styles.roleCountLabel}>#</Text>
+                        <TextInput
+                          style={[styles.input, styles.roleCount]}
+                          value={String(e.count ?? 1)}
+                          onChangeText={(v) => {
+                            const n = parseInt(v, 10);
+                            updateRoleEntry(e.id, { count: v === '' ? 1 : isNaN(n) || n < 1 ? 1 : Math.min(999, n) });
+                          }}
+                          placeholder="1"
+                          placeholderTextColor="#94A3B8"
+                          keyboardType="number-pad"
+                        />
+                      </View>
+                      <TouchableOpacity onPress={() => removeRoleEntry(e.id)} style={styles.roleRemove}>
+                        <Feather name="x" size={18} color="#6B7280" />
+                      </TouchableOpacity>
                     </View>
-                    <TextInput
-                      style={[styles.input, styles.roleNum]}
-                      value={r.hourlyRateDollars}
-                      onChangeText={(v) => updateRole(r.id, { hourlyRateDollars: v })}
-                      placeholder="$/hr"
-                      placeholderTextColor="#94A3B8"
-                      keyboardType="decimal-pad"
-                    />
-                    <TextInput
-                      style={[styles.input, styles.roleNum]}
-                      value={r.perDiemDollars}
-                      onChangeText={(v) => updateRole(r.id, { perDiemDollars: v })}
-                      placeholder="Per diem $"
-                      placeholderTextColor="#94A3B8"
-                      keyboardType="decimal-pad"
-                    />
-                    <TouchableOpacity onPress={() => removeRole(r.id)} style={styles.roleRemove}>
-                      <Feather name="x" size={18} color="#6B7280" />
-                    </TouchableOpacity>
-                  </View>
-                ))}
+                  );
+                })}
                 {rolePickerOpen && (
                   <RNModal visible transparent animationType="fade">
                     <TouchableOpacity
@@ -622,28 +842,35 @@ export function CreateProjectWizard({
                     />
                     <View style={styles.rolePickerModalWrap}>
                       <View style={styles.rolePickerModal}>
-                      <Text style={styles.rolePickerTitle}>Choose from previous roles</Text>
+                      <Text style={styles.rolePickerTitle}>Choose role type</Text>
                       <ScrollView style={styles.rolePickerList}>
-                        {previousRoles.length === 0 ? (
-                          <Text style={styles.rolePickerEmpty}>No previous roles yet. Create roles and they’ll appear here.</Text>
+                        {roleTypes.length === 0 ? (
+                          <Text style={styles.rolePickerEmpty}>No role types yet. Add them in the Roles screen (sidebar).</Text>
                         ) : (
-                          previousRoles.map((prev, idx) => (
-                            <TouchableOpacity
-                              key={`${prev.title}-${idx}`}
-                              style={styles.rolePickerOption}
-                              onPress={() => {
-                                addRoleFromPrevious(prev);
-                                setRolePickerOpen(false);
-                              }}
-                            >
-                              <Text style={styles.rolePickerOptionText}>{prev.title}</Text>
-                              <Text style={styles.rolePickerOptionSub}>
-                                ${(prev.hourlyRateCents / 100).toFixed(0)}/hr · ${(prev.perDiemCents / 100).toFixed(0)} per diem
-                              </Text>
-                            </TouchableOpacity>
-                          ))
+                          roleTypes.map((rt) => (
+                              <TouchableOpacity
+                                key={rt.id}
+                                style={styles.rolePickerOption}
+                                onPress={() => {
+                                  if (typeof rolePickerOpen === 'string') {
+                                    updateRoleEntry(rolePickerOpen, { roleTypeId: rt.id });
+                                  }
+                                  setRolePickerOpen(false);
+                                }}
+                              >
+                                <Text style={styles.rolePickerOptionText}>{rt.name}</Text>
+                                <Text style={styles.rolePickerOptionSub}>
+                                  ${(rt.hourlyRateCents / 100).toFixed(0)}/hr · ${(rt.perDiemCents / 100).toFixed(0)} per diem
+                                  {rt.hotelSoloRoom ? ' · Solo room' : ''}
+                                </Text>
+                              </TouchableOpacity>
+                            ))
                         )}
                       </ScrollView>
+                      <TouchableOpacity style={styles.rolePickerCreateBtn} onPress={openCreateRole}>
+                        <Feather name="plus" size={18} color="#F67A34" />
+                        <Text style={styles.rolePickerCreateBtnText}>Create Role</Text>
+                      </TouchableOpacity>
                       <TouchableOpacity style={styles.rolePickerCancel} onPress={() => setRolePickerOpen(false)}>
                         <Text style={styles.rolePickerCancelText}>Cancel</Text>
                       </TouchableOpacity>
@@ -651,14 +878,73 @@ export function CreateProjectWizard({
                     </View>
                   </RNModal>
                 )}
+                {createRoleModalOpen && (
+                  <RNModal visible transparent animationType="fade">
+                    <TouchableOpacity
+                      style={styles.rolePickerOverlay}
+                      activeOpacity={1}
+                      onPress={closeCreateRole}
+                    />
+                    <View style={styles.rolePickerModalWrap}>
+                      <View style={styles.rolePickerModal}>
+                        <Text style={styles.rolePickerTitle}>Create role type</Text>
+                        <Text style={styles.fieldLabel}>Name</Text>
+                        <TextInput
+                          style={styles.input}
+                          value={createRoleForm.name}
+                          onChangeText={(v) => setCreateRoleForm((f) => ({ ...f, name: v }))}
+                          placeholder="e.g. Electrician"
+                          placeholderTextColor="#94A3B8"
+                        />
+                        <Text style={styles.fieldLabel}>Hourly rate ($)</Text>
+                        <TextInput
+                          style={styles.input}
+                          value={createRoleForm.hourlyRateDollars}
+                          onChangeText={(v) => setCreateRoleForm((f) => ({ ...f, hourlyRateDollars: v }))}
+                          placeholder="0"
+                          placeholderTextColor="#94A3B8"
+                          keyboardType="decimal-pad"
+                        />
+                        <Text style={styles.fieldLabel}>Per diem ($)</Text>
+                        <TextInput
+                          style={styles.input}
+                          value={createRoleForm.perDiemDollars}
+                          onChangeText={(v) => setCreateRoleForm((f) => ({ ...f, perDiemDollars: v }))}
+                          placeholder="0"
+                          placeholderTextColor="#94A3B8"
+                          keyboardType="decimal-pad"
+                        />
+                        <TouchableOpacity
+                          style={[styles.createRoleCheckRow, createRoleForm.hotelSoloRoom && styles.createRoleCheckRowActive]}
+                          onPress={() => setCreateRoleForm((f) => ({ ...f, hotelSoloRoom: !f.hotelSoloRoom }))}
+                        >
+                          <Feather name={createRoleForm.hotelSoloRoom ? 'check-square' : 'square'} size={20} color={createRoleForm.hotelSoloRoom ? '#F67A34' : '#6B7280'} />
+                          <Text style={styles.createRoleCheckLabel}>Hotel solo room</Text>
+                        </TouchableOpacity>
+                        <View style={styles.createRoleModalActions}>
+                          <TouchableOpacity style={styles.createRoleCancelBtn} onPress={closeCreateRole}>
+                            <Text style={styles.createRoleCancelBtnText}>Cancel</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.createRoleSaveBtn, createRoleSaving && styles.createRoleSaveBtnDisabled]}
+                            onPress={handleCreateRoleSave}
+                            disabled={createRoleSaving}
+                          >
+                            {createRoleSaving ? (
+                              <ActivityIndicator size="small" color="#FFFFFF" />
+                            ) : (
+                              <Text style={styles.createRoleSaveBtnText}>Add</Text>
+                            )}
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+                  </RNModal>
+                )}
                 <View style={styles.addRoleRow}>
-                  <TouchableOpacity style={styles.addRoleBtn} onPress={addRole}>
+                  <TouchableOpacity style={styles.addRoleBtn} onPress={addRoleEntry}>
                     <Feather name="plus" size={16} color="#F67A34" />
-                    <Text style={styles.addRoleText}>Add new role</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.addRoleBtn} onPress={() => setRolePickerOpen(true)}>
-                    <Feather name="plus" size={16} color="#F67A34" />
-                    <Text style={styles.addRoleText}>Add existing role</Text>
+                    <Text style={styles.addRoleText}>Add role</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -683,13 +969,8 @@ export function CreateProjectWizard({
                     <Feather name="truck" size={14} color={form.transport === 'DRIVE' ? '#F67A34' : '#6B7280'} />
                     <Text style={[styles.tabText, form.transport === 'DRIVE' && styles.tabTextActive]}>Drive</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.tab, form.transport === 'TRAIN' && styles.tabActive]}
-                    onPress={() => setForm((f) => ({ ...f, transport: 'TRAIN' }))}
-                  >
-                    <Text style={[styles.tabText, form.transport === 'TRAIN' && styles.tabTextActive]}>Train</Text>
-                  </TouchableOpacity>
                 </View>
+                <Text style={styles.helperText}>Choose Fly or Drive for travel to the job site.</Text>
                 <Text style={styles.fieldLabel}>Job site Address *</Text>
                 <TextInput
                   style={styles.input}
@@ -699,7 +980,7 @@ export function CreateProjectWizard({
                   placeholderTextColor="#94A3B8"
                 />
                 <Text style={styles.helperText}>Used for calculating travel and lodging costs</Text>
-                {(form.transport === 'DRIVE' || form.transport === 'TRAIN') && (
+                {form.transport === 'DRIVE' && (
                   <>
                     <Text style={styles.fieldLabel}>Origin Address *</Text>
                     <TextInput
@@ -763,20 +1044,8 @@ export function CreateProjectWizard({
                     </TouchableOpacity>
                   ))}
                 </View>
-                <Text style={styles.fieldLabel}>Single Rooms by Role</Text>
-                <Text style={styles.helperText}>Roles that get their own room (not sharing)</Text>
-                <View style={styles.chipWrap}>
-                  {form.staff.filter((r) => r.title.trim()).map((r) => (
-                    <TouchableOpacity
-                      key={r.id}
-                      style={[styles.chip, form.singleRoomRoleIds.includes(r.id) && styles.chipActive]}
-                      onPress={() => toggleSingleRoom(r.id)}
-                    >
-                      <Text style={styles.chipText}>{r.title}</Text>
-                      <Feather name="x" size={14} color="#484566" />
-                    </TouchableOpacity>
-                  ))}
-                </View>
+                <Text style={styles.fieldLabel}>Single Rooms</Text>
+                <Text style={styles.helperText}>Solo room is set per role type in the Roles screen (sidebar).</Text>
               </View>
             )}
 
@@ -1060,6 +1329,10 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginTop: -4
   },
+  helperTextError: {
+    color: '#DC2626',
+    fontWeight: '500'
+  },
   webDateInput: {
     cursor: Platform.OS === 'web' ? 'pointer' : undefined
   },
@@ -1083,6 +1356,9 @@ const styles = StyleSheet.create({
     color: '#1D2131'
   },
   dateTouchPlaceholder: {
+    color: '#94A3B8'
+  },
+  placeholderText: {
     color: '#94A3B8'
   },
   datePickerOverlay: {
@@ -1230,6 +1506,23 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     padding: 16
   },
+  rolePickerCreateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#FFF7ED',
+    borderRadius: 12
+  },
+  rolePickerCreateBtnText: {
+    fontFamily: Platform.OS === 'web' ? 'Inter, system-ui, sans-serif' : undefined,
+    fontWeight: '600',
+    fontSize: 14,
+    color: '#F67A34'
+  },
   rolePickerCancel: {
     marginTop: 16,
     paddingVertical: 12,
@@ -1239,6 +1532,56 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === 'web' ? 'Inter, system-ui, sans-serif' : undefined,
     fontSize: 16,
     color: '#6B7280'
+  },
+  createRoleCheckRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#F9FAFB'
+  },
+  createRoleCheckRowActive: {
+    backgroundColor: '#FFF7ED'
+  },
+  createRoleCheckLabel: {
+    fontFamily: Platform.OS === 'web' ? 'Inter, system-ui, sans-serif' : undefined,
+    fontSize: 14,
+    color: '#1D2131'
+  },
+  createRoleModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+    marginTop: 20
+  },
+  createRoleCancelBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 20
+  },
+  createRoleCancelBtnText: {
+    fontFamily: Platform.OS === 'web' ? 'Inter, system-ui, sans-serif' : undefined,
+    fontSize: 16,
+    color: '#6B7280'
+  },
+  createRoleSaveBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    backgroundColor: '#F67A34',
+    borderRadius: 12,
+    minWidth: 80,
+    alignItems: 'center'
+  },
+  createRoleSaveBtnDisabled: {
+    opacity: 0.7
+  },
+  createRoleSaveBtnText: {
+    fontFamily: Platform.OS === 'web' ? 'Inter, system-ui, sans-serif' : undefined,
+    fontWeight: '600',
+    fontSize: 16,
+    color: '#FFFFFF'
   },
   addRoleRow: {
     flexDirection: 'row',

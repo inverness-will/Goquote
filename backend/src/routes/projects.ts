@@ -17,6 +17,30 @@ const staffRoleSchema = z.object({
   hotelRoomSharing: z.boolean().optional().default(false)
 });
 
+const costBreakdownLineItemSchema = z.object({
+  label: z.string(),
+  detail: z.string(),
+  amountCents: z.number().int().min(0)
+});
+const costBreakdownSectionSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  amountCents: z.number().int().min(0),
+  lineItems: z.array(costBreakdownLineItemSchema).optional()
+});
+const costBreakdownSchema = z.object({
+  sections: z.array(costBreakdownSectionSchema),
+  subtotalCents: z.number().int().min(0),
+  contingencyCents: z.number().int().min(0),
+  totalCents: z.number().int().min(0)
+});
+
+const projectRoleRefSchema = z.object({
+  roleTypeId: z.string().min(1),
+  count: z.number().int().min(1)
+});
+const rolesSchema = z.array(projectRoleRefSchema).optional();
+
 const createProjectSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   status: z.enum(['DRAFT', 'FINALIZED']).optional().default('DRAFT'),
@@ -37,11 +61,15 @@ const createProjectSchema = z.object({
   destinationAirport: z.string().optional(),
   hotelQuality: z.number().int().min(2).max(5).optional(),
   contingencyBudgetPct: z.number().min(0).max(100).optional(),
-  staff: z.array(staffRoleSchema).optional()
+  staff: z.array(staffRoleSchema).optional(),
+  costBreakdown: costBreakdownSchema.optional(),
+  roles: rolesSchema.optional()
 });
 
 const updateProjectSchema = createProjectSchema.partial().extend({
-  staff: z.array(staffRoleSchema).optional()
+  staff: z.array(staffRoleSchema).optional(),
+  costBreakdown: costBreakdownSchema.optional().nullable(),
+  roles: rolesSchema.optional().nullable()
 });
 
 function parseDate(value: string | Date | undefined): Date | null {
@@ -75,6 +103,8 @@ function toProjectJson(p: ProjectWithStaff) {
     destinationAirport: p.destinationAirport ?? null,
     hotelQuality: p.hotelQuality ?? null,
     contingencyBudgetPct: p.contingencyBudgetPct ?? null,
+    costBreakdown: p.costBreakdown as Record<string, unknown> | null ?? null,
+    roles: (p.roles as Array<{ roleTypeId: string; count: number }>) ?? null,
     staff: (p.staff ?? []).map((s) => ({
       id: s.id,
       title: s.title,
@@ -107,6 +137,7 @@ projectsRouter.post('/', async (req: AuthRequest, res: Response, next: NextFunct
     const body = createProjectSchema.parse(req.body);
     const startDate = parseDate(body.startDate as string | undefined);
     const endDate = parseDate(body.endDate as string | undefined);
+    const budgetFromBreakdown = body.costBreakdown?.totalCents ?? body.budgetCents ?? null;
     const project = await prisma.$transaction(async (tx) => {
       const proj = await tx.project.create({
         data: {
@@ -119,7 +150,7 @@ projectsRouter.post('/', async (req: AuthRequest, res: Response, next: NextFunct
           endDate,
           crew: body.crew ?? null,
           workdays: body.workdays ?? null,
-          budgetCents: body.budgetCents ?? null,
+          budgetCents: budgetFromBreakdown,
           currency: body.currency ? (body.currency as Currency) : null,
           workSaturday: body.workSaturday ?? false,
           workSunday: body.workSunday ?? false,
@@ -129,7 +160,9 @@ projectsRouter.post('/', async (req: AuthRequest, res: Response, next: NextFunct
           originAirport: body.originAirport ?? null,
           destinationAirport: body.destinationAirport ?? null,
           hotelQuality: body.hotelQuality ?? null,
-          contingencyBudgetPct: body.contingencyBudgetPct ?? null
+          contingencyBudgetPct: body.contingencyBudgetPct ?? null,
+          costBreakdown: body.costBreakdown ? JSON.parse(JSON.stringify(body.costBreakdown)) : null,
+          roles: body.roles ? JSON.parse(JSON.stringify(body.roles)) : null
         }
       });
       if (body.staff?.length) {
@@ -172,7 +205,8 @@ projectsRouter.patch('/:id', async (req: AuthRequest, res: Response, next: NextF
     }
     const startDate = body.startDate !== undefined ? parseDate(body.startDate as string | undefined) : undefined;
     const endDate = body.endDate !== undefined ? parseDate(body.endDate as string | undefined) : undefined;
-    const { staff: staffPayload, ...updateData } = body;
+    const { staff: staffPayload, costBreakdown: costBreakdownPayload, roles: rolesPayload, ...updateData } = body;
+    const budgetFromBreakdown = costBreakdownPayload != null ? (costBreakdownPayload as { totalCents?: number }).totalCents : undefined;
     const project = await prisma.$transaction(async (tx) => {
       await tx.project.update({
         where: { id },
@@ -186,6 +220,7 @@ projectsRouter.patch('/:id', async (req: AuthRequest, res: Response, next: NextF
           ...(updateData.crew !== undefined && { crew: updateData.crew }),
           ...(updateData.workdays !== undefined && { workdays: updateData.workdays }),
           ...(updateData.budgetCents !== undefined && { budgetCents: updateData.budgetCents }),
+          ...(budgetFromBreakdown !== undefined && { budgetCents: budgetFromBreakdown }),
           ...(updateData.currency !== undefined && { currency: updateData.currency as Currency }),
           ...(updateData.workSaturday !== undefined && { workSaturday: updateData.workSaturday }),
           ...(updateData.workSunday !== undefined && { workSunday: updateData.workSunday }),
@@ -195,7 +230,9 @@ projectsRouter.patch('/:id', async (req: AuthRequest, res: Response, next: NextF
           ...(updateData.originAirport !== undefined && { originAirport: updateData.originAirport }),
           ...(updateData.destinationAirport !== undefined && { destinationAirport: updateData.destinationAirport }),
           ...(updateData.hotelQuality !== undefined && { hotelQuality: updateData.hotelQuality }),
-          ...(updateData.contingencyBudgetPct !== undefined && { contingencyBudgetPct: updateData.contingencyBudgetPct })
+          ...(updateData.contingencyBudgetPct !== undefined && { contingencyBudgetPct: updateData.contingencyBudgetPct }),
+          ...(costBreakdownPayload !== undefined && { costBreakdown: costBreakdownPayload === null ? null : JSON.parse(JSON.stringify(costBreakdownPayload)) }),
+          ...(rolesPayload !== undefined && { roles: rolesPayload === null ? null : JSON.parse(JSON.stringify(rolesPayload)) })
         }
       });
       if (staffPayload !== undefined) {

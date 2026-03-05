@@ -13,6 +13,8 @@ import { ForgotPasswordScreen } from './src/screens/ForgotPasswordScreen';
 import { VerifyOtpScreen } from './src/screens/VerifyOtpScreen';
 import { ResetPasswordScreen } from './src/screens/ResetPasswordScreen';
 import { DashboardScreen } from './src/screens/DashboardScreen';
+import { EstimateScreen } from './src/screens/EstimateScreen';
+import { RolesScreen } from './src/screens/RolesScreen';
 import { DebugScreen } from './src/screens/DebugScreen';
 import {
   forgotPassword,
@@ -21,6 +23,7 @@ import {
   signUp,
   verifyOtp
 } from './src/services/authApi';
+import type { Project } from './src/services/projectsApi';
 
 type Screen = 'sign-in' | 'sign-up' | 'forgot-password' | 'verify-otp' | 'reset-password';
 type OtpFlow = 'signup' | 'password-reset';
@@ -35,6 +38,8 @@ export default function App() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [showDebug, setShowDebug] = useState(false);
+  const [estimateProject, setEstimateProject] = useState<Project | null>(null);
+  const [showRoles, setShowRoles] = useState(false);
 
   const showPopup = (title: string, message: string) => {
     if (typeof globalThis.alert === 'function') {
@@ -69,6 +74,35 @@ export default function App() {
         </SafeAreaView>
       );
     }
+    if (showRoles) {
+      return (
+        <SafeAreaView style={styles.container}>
+          <StatusBar barStyle="dark-content" />
+          <RolesScreen
+            token={token}
+            user={{ email: user.email, fullName: user.fullName }}
+            onBack={() => setShowRoles(false)}
+            onSignOut={handleSignOut}
+          />
+        </SafeAreaView>
+      );
+    }
+    if (estimateProject) {
+      return (
+        <SafeAreaView style={styles.container}>
+          <StatusBar barStyle="dark-content" />
+          <EstimateScreen
+            project={estimateProject}
+            token={token}
+            user={{ email: user.email, fullName: user.fullName }}
+            onBack={() => setEstimateProject(null)}
+            onSignOut={handleSignOut}
+            onOpenRoles={() => setShowRoles(true)}
+            onDuplicateSuccess={(newProject) => setEstimateProject(newProject)}
+          />
+        </SafeAreaView>
+      );
+    }
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="dark-content" />
@@ -77,6 +111,8 @@ export default function App() {
           user={{ email: user.email, fullName: user.fullName }}
           onSignOut={handleSignOut}
           onOpenDebug={() => setShowDebug(true)}
+          onViewEstimate={(project) => setEstimateProject(project)}
+          onOpenRoles={() => setShowRoles(true)}
         />
       </SafeAreaView>
     );

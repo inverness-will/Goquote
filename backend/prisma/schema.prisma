@@ -30,15 +30,30 @@ enum Transport {
 }
 
 model User {
-  id              String    @id @default(cuid())
-  email           String    @unique
+  id              String     @id @default(cuid())
+  email           String     @unique
   fullName        String
   passwordHash    String
-  isEmailVerified Boolean   @default(false)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  isEmailVerified Boolean    @default(false)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
   otpCodes        OtpCode[]
   projects        Project[]
+  roleTypes       RoleType[]
+}
+
+model RoleType {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name              String
+  hourlyRateCents   Int
+  perDiemCents      Int
+  hotelSoloRoom     Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([userId])
 }
 
 model Project {
@@ -64,6 +79,8 @@ model Project {
   destinationAirport   String?        // airport code e.g. DFW
   hotelQuality          Int?          // 2..5 (star rating)
   contingencyBudgetPct  Float?        // e.g. 10 = 10%
+  costBreakdown         Json?         // estimate summary: { sections, subtotalCents, contingencyCents, totalCents }
+  roles                 Json?         // [{ roleTypeId: string, count: number }]
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt
   staff                 ProjectRole[]

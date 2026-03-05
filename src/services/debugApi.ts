@@ -21,3 +21,19 @@ export async function getDebugTableRows(
   if (!res.ok) throw new Error(data?.message || `Failed ${res.status}`);
   return data;
 }
+
+export async function deleteDebugRow(
+  token: string,
+  tableName: string,
+  id: string
+): Promise<void> {
+  const safeId = String(id).trim();
+  const res = await fetch(
+    `${API_BASE_URL}/api/debug/tables/${encodeURIComponent(tableName)}/${encodeURIComponent(safeId)}`,
+    { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new Error(data?.message || `Delete failed ${res.status}`);
+  }
+}

@@ -13,6 +13,31 @@ export type ProjectRole = {
   hotelRoomSharing: boolean;
 };
 
+export type CostBreakdownLineItem = {
+  label: string;
+  detail: string;
+  amountCents: number;
+};
+
+export type CostBreakdownSection = {
+  id: string;
+  title: string;
+  amountCents: number;
+  lineItems?: CostBreakdownLineItem[];
+};
+
+export type CostBreakdown = {
+  sections: CostBreakdownSection[];
+  subtotalCents: number;
+  contingencyCents: number;
+  totalCents: number;
+};
+
+export type ProjectRoleRef = {
+  roleTypeId: string;
+  count: number;
+};
+
 export type Project = {
   id: string;
   name: string;
@@ -34,6 +59,8 @@ export type Project = {
   destinationAirport: string | null;
   hotelQuality: number | null; // 2..5
   contingencyBudgetPct: number | null;
+  costBreakdown: CostBreakdown | null;
+  roles: ProjectRoleRef[] | null;
   staff: ProjectRole[];
   createdAt: string;
   updatedAt: string;
@@ -67,6 +94,8 @@ export type CreateProjectPayload = {
   hotelQuality?: number;
   contingencyBudgetPct?: number;
   staff?: CreateProjectRolePayload[];
+  costBreakdown?: CostBreakdown;
+  roles?: ProjectRoleRef[];
 };
 
 export type UpdateProjectPayload = Partial<CreateProjectPayload>;
