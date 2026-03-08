@@ -3,7 +3,7 @@ import { prisma } from '../lib/prisma';
 import { requireAuth, AuthRequest } from '../middleware/requireAuth';
 import { HttpError } from '../utils/httpError';
 
-const TABLES = ['User', 'Project', 'ProjectRole', 'OtpCode', 'RoleType'] as const;
+const TABLES = ['User', 'Project', 'ProjectRole', 'ProjectFlight', 'ProjectHotel', 'OtpCode', 'RoleType'] as const;
 type TableName = (typeof TABLES)[number];
 
 function isTableName(name: string): name is TableName {
@@ -39,6 +39,12 @@ debugRouter.get('/tables/:name', async (req: AuthRequest, res: Response, next: N
       case 'ProjectRole':
         rows = await prisma.projectRole.findMany({ orderBy: { createdAt: 'desc' } });
         break;
+      case 'ProjectFlight':
+        rows = await prisma.projectFlight.findMany({ orderBy: [{ projectId: 'asc' }, { sortOrder: 'asc' }] });
+        break;
+      case 'ProjectHotel':
+        rows = await prisma.projectHotel.findMany({ orderBy: [{ projectId: 'asc' }, { sortOrder: 'asc' }] });
+        break;
       case 'OtpCode':
         rows = await prisma.otpCode.findMany({ orderBy: { createdAt: 'desc' } });
         break;
@@ -70,6 +76,12 @@ debugRouter.delete('/tables/:name/:id', async (req: AuthRequest, res: Response, 
         break;
       case 'ProjectRole':
         await prisma.projectRole.delete({ where: { id } });
+        break;
+      case 'ProjectFlight':
+        await prisma.projectFlight.delete({ where: { id } });
+        break;
+      case 'ProjectHotel':
+        await prisma.projectHotel.delete({ where: { id } });
         break;
       case 'OtpCode':
         await prisma.otpCode.delete({ where: { id } });

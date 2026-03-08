@@ -38,6 +38,29 @@ export type ProjectRoleRef = {
   count: number;
 };
 
+export type ProjectFlight = {
+  id: string;
+  airline: string;
+  flightNumber: string;
+  departureTime: string;
+  duration: string;
+  numberOfChanges: number;
+  priceCents: number;
+  sortOrder: number;
+  returnDepartureTime?: string | null;
+  returnDuration?: string | null;
+};
+
+export type ProjectHotel = {
+  id: string;
+  name: string;
+  address: string;
+  stars: number;
+  priceCents: number;
+  sortOrder: number;
+  distanceKm?: number | null;
+};
+
 export type Project = {
   id: string;
   name: string;
@@ -61,7 +84,11 @@ export type Project = {
   contingencyBudgetPct: number | null;
   costBreakdown: CostBreakdown | null;
   roles: ProjectRoleRef[] | null;
+  selectedFlightId: string | null;
+  selectedHotelId: string | null;
   staff: ProjectRole[];
+  flights?: ProjectFlight[];
+  hotels?: ProjectHotel[];
   createdAt: string;
   updatedAt: string;
 };
@@ -96,6 +123,8 @@ export type CreateProjectPayload = {
   staff?: CreateProjectRolePayload[];
   costBreakdown?: CostBreakdown;
   roles?: ProjectRoleRef[];
+  selectedFlightId?: string | null;
+  selectedHotelId?: string | null;
 };
 
 export type UpdateProjectPayload = Partial<CreateProjectPayload>;
@@ -122,6 +151,51 @@ async function request<T>(
   }
 
   return payload as T;
+}
+
+export type TravelPricingFlight = {
+  airline: string;
+  flightNumber: string;
+  departureTime: string;
+  duration: string;
+  numberOfChanges: number;
+  priceCents: number;
+  sortOrder: number;
+};
+
+export type TravelPricingHotel = {
+  name: string;
+  address: string;
+  stars: number;
+  priceCents: number;
+  sortOrder: number;
+};
+
+export type TravelPricingResult = {
+  flights: TravelPricingFlight[];
+  hotels: TravelPricingHotel[];
+  secondCheapestFlightCents: number | null;
+  secondCheapestHotelCents: number | null;
+};
+
+export async function fetchTravelPricing(
+  token: string,
+  params: {
+    originAirport?: string;
+    destinationAirport?: string;
+    departureDate: string;
+    returnDate: string;
+    adults?: number;
+    jobSiteAddress?: string;
+    checkInDate?: string;
+    checkOutDate?: string;
+    hotelQuality?: number;
+  }
+): Promise<TravelPricingResult> {
+  return request<TravelPricingResult>('/api/projects/fetch-travel-pricing', token, {
+    method: 'POST',
+    body: JSON.stringify(params)
+  });
 }
 
 export async function getProjects(token: string): Promise<Project[]> {

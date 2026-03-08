@@ -99,6 +99,7 @@ export default function App() {
             onSignOut={handleSignOut}
             onOpenRoles={() => setShowRoles(true)}
             onDuplicateSuccess={(newProject) => setEstimateProject(newProject)}
+            onProjectUpdate={(updated) => setEstimateProject(updated)}
           />
         </SafeAreaView>
       );

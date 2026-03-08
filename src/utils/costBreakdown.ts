@@ -18,6 +18,10 @@ export type CostBreakdownInput = {
   hotelQuality?: number; // 2..5
   contingencyBudgetPct?: number;
   transport?: 'FLY' | 'DRIVE' | 'TRAIN' | null;
+  /** When set, use this for flights total (e.g. from goquotes API 2nd cheapest × crew). */
+  liveFlightTotalCents?: number | null;
+  /** When set, use this for hotel total (e.g. from goquotes API 2nd cheapest stay). */
+  liveHotelTotalCents?: number | null;
 };
 
 /**
@@ -25,7 +29,7 @@ export type CostBreakdownInput = {
  * these will be filled automatically later via travel site APIs.
  */
 export function buildCostBreakdown(input: CostBreakdownInput): CostBreakdown {
-  const { staff, workdays, hotelQuality = 3, contingencyBudgetPct = 10, transport } = input;
+  const { staff, workdays, hotelQuality = 3, contingencyBudgetPct = 10, transport, liveFlightTotalCents, liveHotelTotalCents } = input;
   const crew = staff.length;
   const nights = Math.max(1, workdays);
   const rateSharedCents = HOTEL_RATE_CENTS_BY_QUALITY[hotelQuality] ?? 13400;
@@ -36,17 +40,23 @@ export function buildCostBreakdown(input: CostBreakdownInput): CostBreakdown {
 
   const hotelNightsCents = sharedRooms * nights * rateSharedCents;
   const singleRoomsCents = singleCount * nights * HOTEL_RATE_SINGLE_CENTS;
-  const hotelTotalCents = hotelNightsCents + singleRoomsCents;
+  const hotelTotalCents = liveHotelTotalCents != null ? liveHotelTotalCents : hotelNightsCents + singleRoomsCents;
 
   const hotelLineItems: CostBreakdownSection['lineItems'] = [];
-  if (sharedRooms > 0) {
+  if (liveHotelTotalCents != null) {
+    hotelLineItems.push({
+      label: 'Hotel stay (2nd of 3 live options)',
+      detail: 'Total for stay',
+      amountCents: liveHotelTotalCents
+    });
+  } else if (sharedRooms > 0) {
     hotelLineItems.push({
       label: 'Hotel Nights (shared)',
       detail: `${sharedRooms} rooms × ${nights} nights × $${(rateSharedCents / 100).toFixed(0)}/night`,
       amountCents: hotelNightsCents
     });
   }
-  if (singleCount > 0) {
+  if (liveHotelTotalCents == null && singleCount > 0) {
     hotelLineItems.push({
       label: 'Single Rooms',
       detail: `${singleCount} room(s) × ${nights} nights × $${(HOTEL_RATE_SINGLE_CENTS / 100).toFixed(0)}/night`,
@@ -72,15 +82,16 @@ export function buildCostBreakdown(input: CostBreakdownInput): CostBreakdown {
 
   let flightsTotalCents = 0;
   if (transport === 'FLY' && crew > 0) {
-    flightsTotalCents = crew * 2 * FLIGHT_COST_PER_LEG_CENTS;
+    flightsTotalCents = liveFlightTotalCents != null ? liveFlightTotalCents : crew * 2 * FLIGHT_COST_PER_LEG_CENTS;
+    const perPerson = liveFlightTotalCents != null ? Math.round(liveFlightTotalCents / crew) : FLIGHT_COST_PER_LEG_CENTS * 2;
     sections.push({
       id: 'flights',
       title: 'Flights Total',
       amountCents: flightsTotalCents,
       lineItems: [
         {
-          label: 'Round-trip',
-          detail: `${crew} crew × 2 legs × $${(FLIGHT_COST_PER_LEG_CENTS / 100).toFixed(0)}`,
+          label: liveFlightTotalCents != null ? 'Round-trip (2nd of 3 live options)' : 'Round-trip',
+          detail: `${crew} crew × $${(perPerson / 100).toFixed(0)}/person`,
           amountCents: flightsTotalCents
         }
       ]

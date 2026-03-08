@@ -42,9 +42,51 @@ app.get('/api/version', (_req: Request, res: Response) => {
   }
 });
 
-app.use(notFound);
-app.use(errorHandler);
+async function start() {
+  // Import goquotes API (flights, hotels, transfers) and mount as Express routes
+  const goquotesApi = await import('goquotes-server/api.js');
 
-app.listen(env.PORT, () => {
-  console.log(`GoQuote backend listening on port ${env.PORT}`);
+  app.get('/api/flights', async (req, res, next) => {
+    try {
+      const data = await goquotesApi.getFlights(req.query as Record<string, string | number | undefined>);
+      res.json(data);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.get('/api/hotels', async (req, res, next) => {
+    try {
+      const data = await goquotesApi.getHotels(req.query as Record<string, string | number | undefined>);
+      res.json(data);
+    } catch (err: unknown) {
+      const e = err as { statusCode?: number; message?: string };
+      if (e.statusCode === 400) {
+        res.status(400).json({ error: e.message ?? 'Bad request' });
+        return;
+      }
+      next(err);
+    }
+  });
+
+  app.get('/api/transfers', async (req, res, next) => {
+    try {
+      const data = await goquotesApi.getTransfers(req.query as Record<string, string | number | undefined>);
+      res.json(data);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.use(notFound);
+  app.use(errorHandler);
+
+  app.listen(env.PORT, () => {
+    console.log(`GoQuote backend listening on port ${env.PORT}`);
+  });
+}
+
+start().catch((err) => {
+  console.error(err);
+  process.exit(1);
 });

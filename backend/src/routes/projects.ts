@@ -5,6 +5,8 @@ import { ProjectStatus, Currency, Transport } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { HttpError } from '../utils/httpError';
 import { requireAuth, AuthRequest } from '../middleware/requireAuth';
+import { fetchTravelPricing } from '../services/travelPricing';
+import { mergeLivePricingIntoBreakdown, applySelectedTravelToBreakdown, type CostBreakdown } from '../utils/costBreakdownMerge';
 
 export const projectsRouter = Router({ mergeParams: true });
 
@@ -63,13 +65,17 @@ const createProjectSchema = z.object({
   contingencyBudgetPct: z.number().min(0).max(100).optional(),
   staff: z.array(staffRoleSchema).optional(),
   costBreakdown: costBreakdownSchema.optional(),
-  roles: rolesSchema.optional()
+  roles: rolesSchema.optional(),
+  selectedFlightId: z.string().optional().nullable(),
+  selectedHotelId: z.string().optional().nullable()
 });
 
 const updateProjectSchema = createProjectSchema.partial().extend({
   staff: z.array(staffRoleSchema).optional(),
   costBreakdown: costBreakdownSchema.optional().nullable(),
-  roles: rolesSchema.optional().nullable()
+  roles: rolesSchema.optional().nullable(),
+  selectedFlightId: z.string().optional().nullable(),
+  selectedHotelId: z.string().optional().nullable()
 });
 
 function parseDate(value: string | Date | undefined): Date | null {
@@ -79,9 +85,15 @@ function parseDate(value: string | Date | undefined): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
-type ProjectWithStaff = Awaited<ReturnType<typeof prisma.project.findMany>>[number] & { staff?: Array<{ id: string; title: string; hourlyRateCents: number; perDiemCents: number; hotelRoomSharing: boolean }> };
+type ProjectWithRelations = Awaited<
+  ReturnType<
+    typeof prisma.project.findFirst<{
+      include: { staff: true; flights: true; hotels: true };
+    }>
+  >
+> & { staff?: Array<{ id: string; title: string; hourlyRateCents: number; perDiemCents: number; hotelRoomSharing: boolean }> };
 
-function toProjectJson(p: ProjectWithStaff) {
+function toProjectJson(p: ProjectWithRelations) {
   return {
     id: p.id,
     name: p.name,
@@ -103,8 +115,10 @@ function toProjectJson(p: ProjectWithStaff) {
     destinationAirport: p.destinationAirport ?? null,
     hotelQuality: p.hotelQuality ?? null,
     contingencyBudgetPct: p.contingencyBudgetPct ?? null,
-    costBreakdown: p.costBreakdown as Record<string, unknown> | null ?? null,
+    costBreakdown: (p.costBreakdown as Record<string, unknown> | null) ?? null,
     roles: (p.roles as Array<{ roleTypeId: string; count: number }>) ?? null,
+    selectedFlightId: (p as { selectedFlightId?: string | null }).selectedFlightId ?? null,
+    selectedHotelId: (p as { selectedHotelId?: string | null }).selectedHotelId ?? null,
     staff: (p.staff ?? []).map((s) => ({
       id: s.id,
       title: s.title,
@@ -112,6 +126,27 @@ function toProjectJson(p: ProjectWithStaff) {
       perDiemCents: s.perDiemCents,
       hotelRoomSharing: s.hotelRoomSharing
     })),
+    flights: (p as { flights?: Array<{ id: string; airline: string; flightNumber: string; departureTime: string; duration: string; numberOfChanges: number; priceCents: number; sortOrder: number; returnDepartureTime?: string | null; returnDuration?: string | null }> }).flights?.map((f) => ({
+      id: f.id,
+      airline: f.airline,
+      flightNumber: f.flightNumber,
+      departureTime: f.departureTime,
+      duration: f.duration,
+      numberOfChanges: f.numberOfChanges,
+      priceCents: f.priceCents,
+      sortOrder: f.sortOrder,
+      returnDepartureTime: f.returnDepartureTime ?? null,
+      returnDuration: f.returnDuration ?? null
+    })) ?? [],
+    hotels: (p as { hotels?: Array<{ id: string; name: string; address: string; stars: number; priceCents: number; sortOrder: number; distanceKm?: number | null }> }).hotels?.map((h) => ({
+      id: h.id,
+      name: h.name,
+      address: h.address,
+      stars: h.stars,
+      priceCents: h.priceCents,
+      sortOrder: h.sortOrder,
+      distanceKm: h.distanceKm ?? null
+    })) ?? [],
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString()
   };
@@ -123,13 +158,21 @@ projectsRouter.get('/', async (req: AuthRequest, res: Response, next: NextFuncti
     const projects = await prisma.project.findMany({
       where: { userId },
       orderBy: { updatedAt: 'desc' },
-      include: { staff: true }
+      include: { staff: true, flights: true, hotels: true }
     });
     res.json(projects.map(toProjectJson));
   } catch (error) {
     next(error);
   }
 });
+
+function toYYYYMMDD(d: Date | null): string | null {
+  if (!d) return null;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
 projectsRouter.post('/', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
@@ -178,10 +221,175 @@ projectsRouter.post('/', async (req: AuthRequest, res: Response, next: NextFunct
       }
       return tx.project.findUniqueOrThrow({
         where: { id: proj.id },
-        include: { staff: true }
+        include: { staff: true, flights: true, hotels: true }
       });
     });
-    res.status(201).json(toProjectJson(project!));
+    const proj = project!;
+
+    // Fetch live flight/hotel pricing when travel params present
+    const depDate = toYYYYMMDD(startDate);
+    const retDate = toYYYYMMDD(endDate);
+    const canFetchFlights =
+      body.transport === 'FLY' &&
+      body.originAirport?.trim() &&
+      body.destinationAirport?.trim() &&
+      depDate &&
+      retDate &&
+      (body.crew ?? 0) > 0;
+    const canFetchHotels = !!(body.jobSiteAddress?.trim() && depDate && retDate);
+
+    console.log('[TravelPricing] POST project', {
+      projectId: proj.id,
+      transport: body.transport,
+      originAirport: body.originAirport?.trim() || null,
+      destinationAirport: body.destinationAirport?.trim() || null,
+      depDate,
+      retDate,
+      crew: body.crew,
+      jobSiteAddress: body.jobSiteAddress?.trim() || null,
+      hasCostBreakdown: !!body.costBreakdown,
+      costBreakdownSections: body.costBreakdown?.sections?.length ?? 0,
+      canFetchFlights,
+      canFetchHotels
+    });
+
+    if ((canFetchFlights || canFetchHotels) && body.costBreakdown) {
+      try {
+        console.log('[TravelPricing] Calling fetchTravelPricing for project', proj.id);
+        const pricing = await fetchTravelPricing({
+          originAirport: (body.originAirport ?? '').trim(),
+          destinationAirport: (body.destinationAirport ?? '').trim(),
+          departureDate: depDate!,
+          returnDate: retDate!,
+          adults: Math.max(1, body.crew ?? 1),
+          jobSiteAddress: (body.jobSiteAddress ?? '').trim(),
+          checkInDate: depDate!,
+          checkOutDate: retDate!,
+          hotelQuality: body.hotelQuality ?? undefined
+        });
+
+        console.log('[TravelPricing] Result for project', proj.id, {
+          flightsCount: pricing.flights.length,
+          hotelsCount: pricing.hotels.length,
+          secondCheapestFlightCents: pricing.secondCheapestFlightCents,
+          secondCheapestHotelCents: pricing.secondCheapestHotelCents
+        });
+
+        await prisma.$transaction(async (tx) => {
+          await tx.projectFlight.deleteMany({ where: { projectId: proj.id } });
+          await tx.projectHotel.deleteMany({ where: { projectId: proj.id } });
+          if (pricing.flights.length) {
+            await tx.projectFlight.createMany({
+              data: pricing.flights.map((f) => ({
+                projectId: proj.id,
+                airline: f.airline,
+                flightNumber: f.flightNumber,
+                departureTime: f.departureTime,
+                duration: f.duration,
+                numberOfChanges: f.numberOfChanges,
+                priceCents: f.priceCents,
+                sortOrder: f.sortOrder,
+                returnDepartureTime: f.returnDepartureTime ?? undefined,
+                returnDuration: f.returnDuration ?? undefined
+              }))
+            });
+          }
+          if (pricing.hotels.length) {
+            await tx.projectHotel.createMany({
+              data: pricing.hotels.map((h) => ({
+                projectId: proj.id,
+                name: h.name,
+                address: h.address,
+                stars: h.stars,
+                priceCents: h.priceCents,
+                sortOrder: h.sortOrder,
+                distanceKm: h.distanceKm ?? undefined
+              }))
+            });
+          }
+          const merged = mergeLivePricingIntoBreakdown(body.costBreakdown as CostBreakdown, {
+            secondCheapestFlightCents: pricing.secondCheapestFlightCents,
+            secondCheapestHotelCents: pricing.secondCheapestHotelCents,
+            crew: body.crew ?? 0,
+            contingencyBudgetPct: body.contingencyBudgetPct ?? 10
+          });
+          const createdFlights = await tx.projectFlight.findMany({
+            where: { projectId: proj.id },
+            orderBy: { sortOrder: 'asc' }
+          });
+          const createdHotels = await tx.projectHotel.findMany({
+            where: { projectId: proj.id },
+            orderBy: { sortOrder: 'asc' }
+          });
+          const selectedFlightId = createdFlights[1]?.id ?? createdFlights[0]?.id ?? null;
+          const selectedHotelId = createdHotels[1]?.id ?? createdHotels[0]?.id ?? null;
+          await tx.project.update({
+            where: { id: proj.id },
+            data: {
+              costBreakdown: JSON.parse(JSON.stringify(merged)),
+              budgetCents: merged.totalCents,
+              selectedFlightId,
+              selectedHotelId
+            }
+          });
+        });
+
+        const updated = await prisma.project.findUniqueOrThrow({
+          where: { id: proj.id },
+          include: { staff: true, flights: true, hotels: true }
+        });
+        console.log('[TravelPricing] Saved', pricing.flights.length, 'flights,', pricing.hotels.length, 'hotels for project', proj.id);
+        return res.status(201).json(toProjectJson(updated));
+      } catch (travelErr) {
+        console.error('[TravelPricing] Failed for project', proj.id, travelErr);
+        // Proceed with project as created (estimated breakdown only)
+      }
+    } else {
+      console.log('[TravelPricing] Skipped (conditions not met or no costBreakdown)');
+    }
+
+    res.status(201).json(toProjectJson(proj));
+  } catch (error) {
+    next(error);
+  }
+});
+
+const fetchTravelPricingSchema = z.object({
+  originAirport: z.string().min(1).optional(),
+  destinationAirport: z.string().min(1).optional(),
+  departureDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  returnDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  adults: z.number().int().min(1).optional().default(1),
+  jobSiteAddress: z.string().optional(),
+  checkInDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  checkOutDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  hotelQuality: z.number().int().min(2).max(5).optional()
+});
+
+projectsRouter.post('/fetch-travel-pricing', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const body = fetchTravelPricingSchema.parse(req.body);
+    const canFetchFlights =
+      body.originAirport?.trim() &&
+      body.destinationAirport?.trim() &&
+      body.departureDate &&
+      body.returnDate;
+    const canFetchHotels = !!(body.jobSiteAddress?.trim() && body.checkInDate && body.checkOutDate);
+    if (!canFetchFlights && !canFetchHotels) {
+      throw new HttpError(400, 'Provide origin/destination airports and dates for flights, or job site address and dates for hotels.');
+    }
+    const pricing = await fetchTravelPricing({
+      originAirport: (body.originAirport ?? '').trim(),
+      destinationAirport: (body.destinationAirport ?? '').trim(),
+      departureDate: body.departureDate,
+      returnDate: body.returnDate,
+      adults: body.adults,
+      jobSiteAddress: (body.jobSiteAddress ?? '').trim(),
+      checkInDate: body.checkInDate ?? body.departureDate,
+      checkOutDate: body.checkOutDate ?? body.returnDate,
+      hotelQuality: body.hotelQuality
+    });
+    res.json(pricing);
   } catch (error) {
     next(error);
   }
@@ -232,7 +440,9 @@ projectsRouter.patch('/:id', async (req: AuthRequest, res: Response, next: NextF
           ...(updateData.hotelQuality !== undefined && { hotelQuality: updateData.hotelQuality }),
           ...(updateData.contingencyBudgetPct !== undefined && { contingencyBudgetPct: updateData.contingencyBudgetPct }),
           ...(costBreakdownPayload !== undefined && { costBreakdown: costBreakdownPayload === null ? null : JSON.parse(JSON.stringify(costBreakdownPayload)) }),
-          ...(rolesPayload !== undefined && { roles: rolesPayload === null ? null : JSON.parse(JSON.stringify(rolesPayload)) })
+          ...(rolesPayload !== undefined && { roles: rolesPayload === null ? null : JSON.parse(JSON.stringify(rolesPayload)) }),
+          ...(updateData.selectedFlightId !== undefined && { selectedFlightId: updateData.selectedFlightId }),
+          ...(updateData.selectedHotelId !== undefined && { selectedHotelId: updateData.selectedHotelId })
         }
       });
       if (staffPayload !== undefined) {
@@ -251,10 +461,180 @@ projectsRouter.patch('/:id', async (req: AuthRequest, res: Response, next: NextF
       }
       return tx.project.findUniqueOrThrow({
         where: { id },
-        include: { staff: true }
+        include: { staff: true, flights: true, hotels: true }
       });
     });
-    res.json(toProjectJson(project!));
+    const updatedProject = project!;
+    const effectiveBreakdown = (costBreakdownPayload != null ? costBreakdownPayload : updatedProject.costBreakdown) as CostBreakdown | null;
+    const depDate = toYYYYMMDD(updatedProject.startDate);
+    const retDate = toYYYYMMDD(updatedProject.endDate);
+    const canFetchFlights =
+      updatedProject.transport === 'FLY' &&
+      (updatedProject.originAirport ?? '').trim() &&
+      (updatedProject.destinationAirport ?? '').trim() &&
+      depDate &&
+      retDate &&
+      (updatedProject.crew ?? 0) > 0 &&
+      effectiveBreakdown != null;
+    const canFetchHotels = !!((updatedProject.jobSiteAddress ?? '').trim() && depDate && retDate && effectiveBreakdown);
+
+    const travelParamsChanged =
+      body.originAirport !== undefined ||
+      body.destinationAirport !== undefined ||
+      body.startDate !== undefined ||
+      body.endDate !== undefined ||
+      body.jobSiteAddress !== undefined ||
+      body.transport !== undefined ||
+      body.crew !== undefined;
+    console.log('[TravelPricing] PATCH project', id, {
+      transport: updatedProject.transport,
+      originAirport: (updatedProject.originAirport ?? '').trim() || null,
+      destinationAirport: (updatedProject.destinationAirport ?? '').trim() || null,
+      depDate,
+      retDate,
+      crew: updatedProject.crew,
+      jobSiteAddress: (updatedProject.jobSiteAddress ?? '').trim() || null,
+      hasEffectiveBreakdown: !!effectiveBreakdown,
+      canFetchFlights,
+      canFetchHotels,
+      travelParamsChanged
+    });
+
+    if ((canFetchFlights || canFetchHotels) && effectiveBreakdown && travelParamsChanged) {
+      try {
+        console.log('[TravelPricing] Calling fetchTravelPricing for project', id);
+        const pricing = await fetchTravelPricing({
+          originAirport: (updatedProject.originAirport ?? '').trim(),
+          destinationAirport: (updatedProject.destinationAirport ?? '').trim(),
+          departureDate: depDate!,
+          returnDate: retDate!,
+          adults: Math.max(1, updatedProject.crew ?? 1),
+          jobSiteAddress: (updatedProject.jobSiteAddress ?? '').trim(),
+          checkInDate: depDate!,
+          checkOutDate: retDate!,
+          hotelQuality: updatedProject.hotelQuality ?? undefined
+        });
+        console.log('[TravelPricing] Result for project', id, {
+          flightsCount: pricing.flights.length,
+          hotelsCount: pricing.hotels.length,
+          secondCheapestFlightCents: pricing.secondCheapestFlightCents,
+          secondCheapestHotelCents: pricing.secondCheapestHotelCents
+        });
+        await prisma.$transaction(async (tx) => {
+          await tx.projectFlight.deleteMany({ where: { projectId: id } });
+          await tx.projectHotel.deleteMany({ where: { projectId: id } });
+          if (pricing.flights.length) {
+            await tx.projectFlight.createMany({
+              data: pricing.flights.map((f) => ({
+                projectId: id,
+                airline: f.airline,
+                flightNumber: f.flightNumber,
+                departureTime: f.departureTime,
+                duration: f.duration,
+                numberOfChanges: f.numberOfChanges,
+                priceCents: f.priceCents,
+                sortOrder: f.sortOrder,
+                returnDepartureTime: f.returnDepartureTime ?? undefined,
+                returnDuration: f.returnDuration ?? undefined
+              }))
+            });
+          }
+          if (pricing.hotels.length) {
+            await tx.projectHotel.createMany({
+              data: pricing.hotels.map((h) => ({
+                projectId: id,
+                name: h.name,
+                address: h.address,
+                stars: h.stars,
+                priceCents: h.priceCents,
+                sortOrder: h.sortOrder,
+                distanceKm: h.distanceKm ?? undefined
+              }))
+            });
+          }
+          const merged = mergeLivePricingIntoBreakdown(effectiveBreakdown as CostBreakdown, {
+            secondCheapestFlightCents: pricing.secondCheapestFlightCents,
+            secondCheapestHotelCents: pricing.secondCheapestHotelCents,
+            crew: updatedProject.crew ?? 0,
+            contingencyBudgetPct: updatedProject.contingencyBudgetPct ?? 10
+          });
+          const createdFlights = await tx.projectFlight.findMany({
+            where: { projectId: id },
+            orderBy: { sortOrder: 'asc' }
+          });
+          const createdHotels = await tx.projectHotel.findMany({
+            where: { projectId: id },
+            orderBy: { sortOrder: 'asc' }
+          });
+          const selectedFlightId = createdFlights[1]?.id ?? createdFlights[0]?.id ?? null;
+          const selectedHotelId = createdHotels[1]?.id ?? createdHotels[0]?.id ?? null;
+          await tx.project.update({
+            where: { id },
+            data: {
+              costBreakdown: JSON.parse(JSON.stringify(merged)),
+              budgetCents: merged.totalCents,
+              selectedFlightId,
+              selectedHotelId
+            }
+          });
+        });
+        console.log('[TravelPricing] Saved', pricing.flights.length, 'flights,', pricing.hotels.length, 'hotels for project', id);
+        const withTravel = await prisma.project.findUniqueOrThrow({
+          where: { id },
+          include: { staff: true, flights: true, hotels: true }
+        });
+        return res.json(toProjectJson(withTravel));
+      } catch (travelErr) {
+        console.error('[TravelPricing] Failed for project', id, travelErr);
+        // Keep updated project without live travel data
+      }
+    } else {
+      console.log('[TravelPricing] PATCH skipped (conditions not met or no breakdown)');
+    }
+
+    if (body.selectedFlightId !== undefined || body.selectedHotelId !== undefined) {
+      const proj = await prisma.project.findUnique({
+        where: { id },
+        include: { staff: true, flights: true, hotels: true }
+      });
+      if (
+        proj &&
+        proj.costBreakdown &&
+        typeof proj.costBreakdown === 'object' &&
+        Array.isArray((proj.costBreakdown as CostBreakdown).sections)
+      ) {
+        const cb = proj.costBreakdown as CostBreakdown;
+        let flightTotal: number | null = null;
+        let hotelTotal: number | null = null;
+        if (body.selectedFlightId != null && proj.flights?.length) {
+          const f = proj.flights.find((x) => x.id === body.selectedFlightId);
+          if (f) flightTotal = (proj.crew ?? 0) * f.priceCents;
+        }
+        if (body.selectedHotelId != null && proj.hotels?.length) {
+          const h = proj.hotels.find((x) => x.id === body.selectedHotelId);
+          if (h) hotelTotal = h.priceCents;
+        }
+        const merged = applySelectedTravelToBreakdown(cb, {
+          selectedFlightTotalCents: flightTotal ?? undefined,
+          selectedHotelTotalCents: hotelTotal ?? undefined,
+          crew: proj.crew ?? 0,
+          contingencyBudgetPct: proj.contingencyBudgetPct ?? 10
+        });
+        await prisma.project.update({
+          where: { id },
+          data: {
+            costBreakdown: JSON.parse(JSON.stringify(merged)),
+            budgetCents: merged.totalCents
+          }
+        });
+        const final = await prisma.project.findUniqueOrThrow({
+          where: { id },
+          include: { staff: true, flights: true, hotels: true }
+        });
+        return res.json(toProjectJson(final));
+      }
+    }
+    res.json(toProjectJson(updatedProject));
   } catch (error) {
     next(error);
   }

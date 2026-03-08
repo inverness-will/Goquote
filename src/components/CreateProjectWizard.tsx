@@ -14,7 +14,8 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Feather } from '@expo/vector-icons';
-import type { CreateProjectPayload, Currency, Transport, Project, ProjectRoleRef } from '../services/projectsApi';
+import type { CreateProjectPayload, Currency, Transport, Project, ProjectRoleRef, TravelPricingResult } from '../services/projectsApi';
+import { fetchTravelPricing } from '../services/projectsApi';
 import { buildCostBreakdown } from '../utils/costBreakdown';
 import { getRoleTypes, createRoleType, type RoleType } from '../services/roleTypesApi';
 
@@ -287,6 +288,9 @@ export function CreateProjectWizard({
     hotelSoloRoom: false
   });
   const [createRoleSaving, setCreateRoleSaving] = useState(false);
+  const [livePricing, setLivePricing] = useState<TravelPricingResult | null>(null);
+  const [livePricingLoading, setLivePricingLoading] = useState(false);
+  const [livePricingError, setLivePricingError] = useState<string | null>(null);
   const nextId = useId();
 
   React.useEffect(() => {
@@ -305,7 +309,47 @@ export function CreateProjectWizard({
       setForm(defaultFormState);
       setStep(0);
     }
+    setLivePricing(null);
+    setLivePricingError(null);
   }, [visible, initialProject]);
+
+  const handleFetchLivePrices = async () => {
+    const startStr = form.startDate.trim().slice(0, 10);
+    const endStr = form.endDate.trim().slice(0, 10);
+    const canFetchFlights =
+      form.transport === 'FLY' &&
+      form.originAirport?.trim() &&
+      form.destinationAirport?.trim() &&
+      startStr &&
+      endStr;
+    const canFetchHotels = !!(form.jobSiteAddress?.trim() && startStr && endStr);
+    if (!canFetchFlights && !canFetchHotels) {
+      setLivePricingError('Enter origin/destination airports and dates for flights, and job site address for hotels.');
+      return;
+    }
+    setLivePricingError(null);
+    setLivePricingLoading(true);
+    try {
+      const crewNum = form.crew.trim() ? parseInt(form.crew, 10) : 1;
+      const result = await fetchTravelPricing(token, {
+        originAirport: canFetchFlights ? form.originAirport?.trim() : undefined,
+        destinationAirport: canFetchFlights ? form.destinationAirport?.trim() : undefined,
+        departureDate: startStr,
+        returnDate: endStr,
+        adults: Math.max(1, crewNum),
+        jobSiteAddress: form.jobSiteAddress?.trim() || undefined,
+        checkInDate: startStr,
+        checkOutDate: endStr,
+        hotelQuality: form.hotelQuality ? parseInt(form.hotelQuality, 10) : undefined
+      });
+      setLivePricing(result);
+    } catch (e) {
+      setLivePricingError(e instanceof Error ? e.message : 'Failed to fetch live prices');
+      setLivePricing(null);
+    } finally {
+      setLivePricingLoading(false);
+    }
+  };
 
   const { width: windowWidth } = useWindowDimensions();
   const narrowWizard = windowWidth < 600;
@@ -459,12 +503,19 @@ export function CreateProjectWizard({
         ? getWorkingDaysInRange(form.startDate, form.endDate, form.workSaturday, form.workSunday)
         : 1;
     const hotelQualityNum = form.hotelQuality ? parseInt(form.hotelQuality, 10) : undefined;
+    const crewCount = form.crew.trim() ? parseInt(form.crew, 10) : 0;
+    const liveFlightTotalCents =
+      livePricing?.secondCheapestFlightCents != null && crewCount > 0
+        ? livePricing.secondCheapestFlightCents * crewCount
+        : null;
     const costBreakdown = buildCostBreakdown({
       staff: staffPayload.length ? staffPayload : [],
       workdays: calendarWorkingDays,
       hotelQuality: hotelQualityNum,
       contingencyBudgetPct: form.contingencyBudgetPct,
-      transport: form.transport ?? undefined
+      transport: form.transport ?? undefined,
+      liveFlightTotalCents: liveFlightTotalCents ?? undefined,
+      liveHotelTotalCents: livePricing?.secondCheapestHotelCents ?? undefined
     });
     return {
       name: form.name.trim(),
@@ -1026,6 +1077,33 @@ export function CreateProjectWizard({
                     />
                   </>
                 )}
+                {(form.transport === 'FLY' && form.originAirport?.trim() && form.destinationAirport?.trim() && form.startDate?.trim() && form.endDate?.trim()) ||
+                (form.jobSiteAddress?.trim() && form.startDate?.trim() && form.endDate?.trim()) ? (
+                  <View style={styles.livePricingBlock}>
+                    <TouchableOpacity
+                      style={[styles.fetchLivePricesBtn, livePricingLoading && styles.fetchLivePricesBtnDisabled]}
+                      onPress={handleFetchLivePrices}
+                      disabled={livePricingLoading}
+                    >
+                      {livePricingLoading ? (
+                        <ActivityIndicator size="small" color="#FFF" />
+                      ) : (
+                        <>
+                          <Feather name="refresh-cw" size={18} color="#FFF" />
+                          <Text style={styles.fetchLivePricesBtnText}>Fetch live flight & hotel prices</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                    {livePricingError ? (
+                      <Text style={styles.livePricingError}>{livePricingError}</Text>
+                    ) : null}
+                    {livePricing && !livePricingLoading ? (
+                      <Text style={styles.livePricingSummary}>
+                        Estimate uses 2nd lowest price when you save.
+                      </Text>
+                    ) : null}
+                  </View>
+                ) : null}
               </View>
             )}
 
@@ -1332,6 +1410,39 @@ const styles = StyleSheet.create({
   helperTextError: {
     color: '#DC2626',
     fontWeight: '500'
+  },
+  livePricingBlock: {
+    marginTop: 16,
+    gap: 8
+  },
+  fetchLivePricesBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#F67A34',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10
+  },
+  fetchLivePricesBtnDisabled: {
+    opacity: 0.7
+  },
+  fetchLivePricesBtnText: {
+    fontFamily: Platform.OS === 'web' ? 'Inter, system-ui, sans-serif' : undefined,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFF'
+  },
+  livePricingError: {
+    fontFamily: Platform.OS === 'web' ? 'Inter, system-ui, sans-serif' : undefined,
+    fontSize: 12,
+    color: '#DC2626'
+  },
+  livePricingSummary: {
+    fontFamily: Platform.OS === 'web' ? 'Inter, system-ui, sans-serif' : undefined,
+    fontSize: 12,
+    color: '#6B7280'
   },
   webDateInput: {
     cursor: Platform.OS === 'web' ? 'pointer' : undefined

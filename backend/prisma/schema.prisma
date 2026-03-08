@@ -81,11 +81,50 @@ model Project {
   contingencyBudgetPct  Float?        // e.g. 10 = 10%
   costBreakdown         Json?         // estimate summary: { sections, subtotalCents, contingencyCents, totalCents }
   roles                 Json?         // [{ roleTypeId: string, count: number }]
+  selectedFlightId      String?       // which stored flight is used in the estimate (default: 2nd cheapest)
+  selectedHotelId      String?       // which stored hotel is used in the estimate (default: 2nd cheapest)
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt
   staff                 ProjectRole[]
+  flights               ProjectFlight[]
+  hotels                ProjectHotel[]
 
   @@index([userId])
+}
+
+model ProjectFlight {
+  id                   String   @id @default(cuid())
+  projectId            String
+  project              Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  airline              String
+  flightNumber         String
+  departureTime        String   // ISO datetime of outbound first segment
+  duration             String   // outbound e.g. PT2H30M
+  numberOfChanges      Int      // total stops (outbound + return)
+  priceCents           Int
+  sortOrder            Int      @default(0) // 0 = cheapest, 1 = 2nd, 2 = 3rd
+  returnDepartureTime  String?  // ISO datetime of return first segment
+  returnDuration       String?  // return e.g. PT5H15M
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([projectId])
+}
+
+model ProjectHotel {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  address     String
+  stars       Int      // 2..5
+  priceCents  Int
+  sortOrder   Int      @default(0) // 0 = cheapest, 1 = 2nd, 2 = 3rd
+  distanceKm  Float?   // distance from job site (from Amadeus by-geocode)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([projectId])
 }
 
 model ProjectRole {
