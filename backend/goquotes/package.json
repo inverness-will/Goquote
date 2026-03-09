@@ -1,0 +1,11 @@
+{
+  "name": "goquotes-server",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "api.js",
+  "exports": {
+    ".": "./api.js",
+    "./api.js": "./api.js"
+  },
+  "description": "Embedded travel API (flights, hotels, transfers) via Amadeus. Env: AMADEUS_API_KEY, AMADEUS_API_SECRET, optional AMADEUS_BASE_URL in backend .env"
+}
