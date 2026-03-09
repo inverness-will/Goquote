@@ -438,7 +438,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                   activeOpacity={0.7}
                 >
                   <Feather name="file-text" size={18} color="#1D2131" />
-                  <Text style={styles.menuItemText}>View estimate</Text>
+                  <Text style={styles.menuItemText}>See summary</Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity
