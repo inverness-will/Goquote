@@ -4,14 +4,14 @@
  * Query objects can come from Express (req.query) or Fastify (request.query).
  */
 
-import { amadeusGet, amadeusPost } from './lib/amadeus.js';
-import { geocodeAddress } from './lib/geocode.js';
+const { amadeusGet, amadeusPost } = require('./lib/amadeus.js');
+const { geocodeAddress } = require('./lib/geocode.js');
 
 /**
  * @param {Record<string, string|number|undefined>} query
  * @returns {Promise<{ count: number, flights: object[], dictionaries: object }>}
  */
-export async function getFlights(query) {
+async function getFlights(query) {
   const {
     origin, destination, departureDate, returnDate,
     adults = 1, travelClass, nonStop, currencyCode, max = 10,
@@ -43,7 +43,7 @@ export async function getFlights(query) {
  * @param {Record<string, string|number|undefined>} query
  * @returns {Promise<{ count: number, hotels: object[], geocode?: { lat: number, lon: number } }>}
  */
-export async function getHotels(query) {
+async function getHotels(query) {
   const {
     address, latitude, longitude, checkInDate, checkOutDate,
     adults = 1, radius = 250, ratings, currencyCode,
@@ -137,7 +137,7 @@ export async function getHotels(query) {
  * @param {Record<string, string|number|undefined>} query
  * @returns {Promise<{ count: number, transfers: object[] }>}
  */
-export async function getTransfers(query) {
+async function getTransfers(query) {
   const {
     airportCode, startDateTime, transferType = 'PRIVATE',
     passengers = 1, endAddress, endCityName, endCountryCode,
@@ -161,3 +161,5 @@ export async function getTransfers(query) {
     transfers: data.data ?? [],
   };
 }
+
+module.exports = { getFlights, getHotels, getTransfers };

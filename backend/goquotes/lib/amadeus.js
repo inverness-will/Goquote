@@ -41,7 +41,7 @@ async function authenticate() {
  * @param {string} path - e.g. '/v2/shopping/flight-offers'
  * @param {Record<string, string>} params - query parameters
  */
-export async function amadeusGet(path, params = {}) {
+async function amadeusGet(path, params = {}) {
   const accessToken = await authenticate();
   const qs = new URLSearchParams(params).toString();
   const url = `${BASE_URL}${path}${qs ? '?' + qs : ''}`;
@@ -73,7 +73,7 @@ export async function amadeusGet(path, params = {}) {
  * @param {string} path
  * @param {object} body - JSON body
  */
-export async function amadeusPost(path, body) {
+async function amadeusPost(path, body) {
   const accessToken = await authenticate();
   const url = `${BASE_URL}${path}`;
 
@@ -98,3 +98,5 @@ export async function amadeusPost(path, body) {
   console.log('[Amadeus] POST', path, 'OK', res.status, count != null ? `(${count} result(s))` : '');
   return data;
 }
+
+module.exports = { amadeusGet, amadeusPost };

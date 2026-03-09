@@ -6,7 +6,7 @@ const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
  * @param {string} address
  * @returns {Promise<{ lat: number, lon: number }>}
  */
-export async function geocodeAddress(address) {
+async function geocodeAddress(address) {
   const params = new URLSearchParams({
     q: address,
     format: 'json',
@@ -32,3 +32,5 @@ export async function geocodeAddress(address) {
     lon: parseFloat(results[0].lon),
   };
 }
+
+module.exports = { geocodeAddress };
