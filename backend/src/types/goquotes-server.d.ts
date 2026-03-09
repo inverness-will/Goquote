@@ -1,5 +1,5 @@
 declare module 'goquotes-server/api.js' {
-  type Query = Record<string, string | number | undefined>;
+  type Query = Record<string, string | number | boolean | undefined>;
 
   export function getFlights(query: Query): Promise<{
     count: number;
