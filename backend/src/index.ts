@@ -9,6 +9,7 @@ import { healthRouter } from './routes/health';
 import { projectsRouter } from './routes/projects';
 import { roleTypesRouter } from './routes/roleTypes';
 import { debugRouter } from './routes/debug';
+import { altaFirewallRouter } from './routes/altaFirewall';
 
 const app = express();
 
@@ -32,6 +33,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/projects', projectsRouter);
 app.use('/api/role-types', roleTypesRouter);
 app.use('/api/debug', debugRouter);
+app.use('/api/alta', altaFirewallRouter);
 
 app.get('/api/version', (_req: Request, res: Response) => {
   try {

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Alta Video — firewall IPs</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="header">
+        <h1>Alta Video firewall lookup</h1>
+        <p class="lede">
+          Enter your deployment details. Your password is sent only to your configured API (see
+          <code>VITE_API_BASE_URL</code>) and is not stored.
+        </p>
+      </header>
+
+      <form class="form" id="form" autocomplete="on">
+        <label class="field">
+          <span class="label">Deployment</span>
+          <input
+            type="text"
+            name="deployment"
+            id="deployment"
+            required
+            placeholder="e.g. ecosystem-1000 or full host"
+            autocomplete="organization"
+          />
+        </label>
+        <label class="field">
+          <span class="label">Region</span>
+          <input
+            type="text"
+            name="region"
+            id="region"
+            placeholder="e.g. us6 (if deployment is short name only)"
+            autocomplete="off"
+          />
+        </label>
+        <label class="field">
+          <span class="label">User ID</span>
+          <input
+            type="text"
+            name="username"
+            id="username"
+            required
+            placeholder="Alta Video username"
+            autocomplete="username"
+          />
+        </label>
+        <label class="field">
+          <span class="label">Password</span>
+          <input
+            type="password"
+            name="password"
+            id="password"
+            required
+            placeholder="Password"
+            autocomplete="current-password"
+          />
+        </label>
+        <div class="actions">
+          <button type="submit" class="btn" id="submit">Lookup IPs</button>
+        </div>
+      </form>
+
+      <p class="hint">Press <kbd>Enter</kbd> in any field to submit.</p>
+
+      <div class="status" id="status" hidden></div>
+      <section class="output" id="output" hidden>
+        <h2>Result</h2>
+        <pre class="json" id="json"></pre>
+      </section>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
