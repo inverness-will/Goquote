@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import type { Project, ProjectStatus, CostBreakdown, CreateProjectPayload, ProjectFlight } from '../services/projectsApi';
-import { createProject, updateProject } from '../services/projectsApi';
+import { createProject, updateProject, exportProjectPdf } from '../services/projectsApi';
 import { AppSidebar, SIDEBAR_WIDTH, SIDEBAR_COLLAPSE_BREAKPOINT } from '../components/AppSidebar';
 const STATUS_COLORS: Record<ProjectStatus, string> = {
   DRAFT: '#6B7280',
@@ -253,6 +253,7 @@ export const EstimateScreen: React.FC<EstimateScreenProps> = ({
   const [flightsDepartureFilter, setFlightsDepartureFilter] = useState<DepartureFilter>('any');
   const [selectingFlightId, setSelectingFlightId] = useState<string | null>(null);
   const [selectingHotelId, setSelectingHotelId] = useState<string | null>(null);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   const { width: windowWidth } = useWindowDimensions();
   const sidebarCollapsed = windowWidth < SIDEBAR_COLLAPSE_BREAKPOINT;
@@ -313,6 +314,17 @@ export const EstimateScreen: React.FC<EstimateScreenProps> = ({
     : 'JD';
   const displayName = user?.fullName?.split(/\s+/)[0] + ' ' + (user?.fullName?.split(/\s+/)[1]?.[0] ?? '') || 'User';
   const displayEmail = user?.email ?? '';
+
+  const handleExportPdf = async () => {
+    setExportingPdf(true);
+    try {
+      await exportProjectPdf(token, project.id);
+    } catch (e) {
+      Alert.alert('Export failed', e instanceof Error ? e.message : 'Could not generate PDF');
+    } finally {
+      setExportingPdf(false);
+    }
+  };
 
   const handleDuplicate = async () => {
     const payload: CreateProjectPayload = {
@@ -394,8 +406,17 @@ export const EstimateScreen: React.FC<EstimateScreenProps> = ({
               </View>
             </View>
             <View style={styles.headerActions}>
-              <TouchableOpacity style={styles.actionBtn} activeOpacity={0.7}>
-                <Feather name="download" size={24} color="#F67A34" />
+              <TouchableOpacity
+                style={styles.actionBtn}
+                activeOpacity={0.7}
+                onPress={handleExportPdf}
+                disabled={exportingPdf}
+              >
+                {exportingPdf ? (
+                  <ActivityIndicator size="small" color="#F67A34" />
+                ) : (
+                  <Feather name="download" size={24} color="#F67A34" />
+                )}
                 <Text style={styles.actionBtnText}>Export</Text>
               </TouchableOpacity>
               <View style={styles.actionDivider} />

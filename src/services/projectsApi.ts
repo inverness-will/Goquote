@@ -1,3 +1,6 @@
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+
 const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_BASE_URL?.trim() || 'http://localhost:4000';
 
@@ -236,4 +239,35 @@ export async function deleteProject(token: string, id: string): Promise<void> {
   const payload = await response.json().catch(() => null);
   const message = payload?.message || `Request failed with status ${response.status}`;
   throw new Error(message);
+}
+
+/** Download project PDF and share it (save to device / share sheet). Returns the local file URI. */
+export async function exportProjectPdf(token: string, projectId: string): Promise<string> {
+  const response = await fetch(`${API_BASE_URL}/api/projects/${projectId}/pdf`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.message ?? `Failed to generate PDF (${response.status})`);
+  }
+  const arrayBuffer = await response.arrayBuffer();
+  const bytes = new Uint8Array(arrayBuffer);
+  const chunk = 8192;
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk) as unknown as number[]);
+  }
+  const base64 = btoa(binary);
+  const filename = `project-summary-${projectId.slice(0, 8)}.pdf`;
+  const uri = `${FileSystem.cacheDirectory}${filename}`;
+  await FileSystem.writeAsStringAsync(uri, base64, { encoding: FileSystem.EncodingType.Base64 });
+  const canShare = await Sharing.isAvailableAsync();
+  if (canShare) {
+    await Sharing.shareAsync(uri, {
+      mimeType: 'application/pdf',
+      dialogTitle: 'Save or share project summary'
+    });
+  }
+  return uri;
 }

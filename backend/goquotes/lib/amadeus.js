@@ -99,4 +99,4 @@ async function amadeusPost(path, body) {
   return data;
 }
 
-module.exports = { amadeusGet, amadeusPost };
+export { amadeusGet, amadeusPost };

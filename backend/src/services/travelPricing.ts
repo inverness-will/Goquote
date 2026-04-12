@@ -52,8 +52,10 @@ function parseFlightOffer(
   dictionaries: GoquotesFlights['dictionaries'],
   sortOrder: number
 ): ProjectFlightInput {
-  const price = (offer as { price?: { grandTotal?: string; currency?: string } }).price;
-  const priceCents = parsePriceToCents(price?.grandTotal);
+  const price = (offer as { price?: { grandTotal?: string; total?: string; base?: string; currency?: string } }).price;
+  // Use full price (grandTotal or total); prefer over base so we show $460 not $400 when base=400, total=460
+  const totalPriceString = price?.grandTotal ?? price?.total ?? price?.base;
+  const priceCents = parsePriceToCents(totalPriceString);
 
   const itineraries = (offer as { itineraries?: Array<{ duration?: string; segments?: Array<{ departure?: { at?: string }; carrierCode?: string; number?: string }> }> }).itineraries ?? [];
   const firstItin = itineraries[0];
@@ -181,7 +183,7 @@ export async function fetchTravelPricing(params: {
       console.log('[TravelPricing] Calling getFlights (all)...');
       const [allResult, nonStopResult] = await Promise.all([
         goquotesApi.getFlights(baseParams),
-        goquotesApi.getFlights({ ...baseParams, nonStop: true, max: 30 })
+        goquotesApi.getFlights({ ...baseParams, nonStop: 'true', max: 30 })
       ]);
 
       const allOffers = (allResult.flights as GoquotesFlights['flights']) ?? [];
@@ -213,8 +215,10 @@ export async function fetchTravelPricing(params: {
       console.log('[TravelPricing] getFlights merged', allOffers.length, '+', nonStopOffers.length, '->', rawCount, 'offers');
 
       const sortedFlights = mergedOffers.slice().sort((a, b) => {
-        const pa = parsePriceToCents((a as { price?: { grandTotal?: string } }).price?.grandTotal);
-        const pb = parsePriceToCents((b as { price?: { grandTotal?: string } }).price?.grandTotal);
+        const priceA = (a as { price?: { grandTotal?: string; total?: string } }).price;
+        const priceB = (b as { price?: { grandTotal?: string; total?: string } }).price;
+        const pa = parsePriceToCents(priceA?.grandTotal ?? priceA?.total);
+        const pb = parsePriceToCents(priceB?.grandTotal ?? priceB?.total);
         return pa - pb;
       });
 

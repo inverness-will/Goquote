@@ -30,11 +30,13 @@
     "express": "^5.2.1",
     "goquotes-server": "file:./goquotes",
     "jsonwebtoken": "^9.0.3",
+    "pdfkit": "^0.18.0",
     "resend": "^6.9.2",
     "typescript": "^5.9.3",
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@types/pdfkit": "^0.17.5",
     "prisma": "^6.19.2",
     "tsx": "^4.21.0"
   }

@@ -6,6 +6,7 @@ import { prisma } from '../lib/prisma';
 import { HttpError } from '../utils/httpError';
 import { requireAuth, AuthRequest } from '../middleware/requireAuth';
 import { fetchTravelPricing } from '../services/travelPricing';
+import { buildProjectPdfBuffer, type ProjectJson } from '../services/projectPdf';
 import { mergeLivePricingIntoBreakdown, applySelectedTravelToBreakdown, type CostBreakdown } from '../utils/costBreakdownMerge';
 
 export const projectsRouter = Router({ mergeParams: true });
@@ -401,6 +402,28 @@ function paramId(params: { id?: string | string[] }): string {
   if (!id) throw new HttpError(400, 'Invalid project id');
   return id;
 }
+
+projectsRouter.get('/:id/pdf', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.userId!;
+    const id = paramId(req.params);
+    const project = await prisma.project.findFirst({
+      where: { id, userId },
+      include: { staff: true, flights: true, hotels: true }
+    });
+    if (!project) {
+      throw new HttpError(404, 'Project not found.');
+    }
+    const json = toProjectJson(project as ProjectWithRelations) as ProjectJson;
+    const buffer = await buildProjectPdfBuffer(json);
+    const safeName = (json.name.replace(/[^a-zA-Z0-9-_ ]/g, '').trim() || 'project-summary') + '.pdf';
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="' + safeName + '"');
+    res.send(buffer);
+  } catch (error) {
+    next(error);
+  }
+});
 
 projectsRouter.patch('/:id', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
