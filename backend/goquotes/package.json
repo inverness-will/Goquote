@@ -1,7 +1,6 @@
 {
   "name": "goquotes-server",
   "version": "1.0.0",
-  "type": "module",
   "main": "api.js",
   "exports": {
     ".": "./api.js",

@@ -33,4 +33,4 @@ async function geocodeAddress(address) {
   };
 }
 
-export { geocodeAddress };
+module.exports = { geocodeAddress };

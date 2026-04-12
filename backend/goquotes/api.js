@@ -4,8 +4,8 @@
  * Query objects can come from Express (req.query) or Fastify (request.query).
  */
 
-import { amadeusGet, amadeusPost } from './lib/amadeus.js';
-import { geocodeAddress } from './lib/geocode.js';
+const { amadeusGet, amadeusPost } = require('./lib/amadeus.js');
+const { geocodeAddress } = require('./lib/geocode.js');
 
 /**
  * @param {Record<string, string|number|undefined>} query
@@ -162,4 +162,4 @@ async function getTransfers(query) {
   };
 }
 
-export { getFlights, getHotels, getTransfers };
+module.exports = { getFlights, getHotels, getTransfers };
